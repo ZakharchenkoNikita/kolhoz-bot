@@ -6,7 +6,7 @@ const fs = require('fs');
 const seedData = require('./SeedData');
 const seedItems = require('./house/SeedItems'); 
 
-// 🚀 ЭТАП 2: Вынесли дефолтный профиль в константу для чистоты кода
+// Вынесли дефолтный профиль в константу для чистоты кода
 const DEFAULT_PROFILE = {
     nickname: 'Неизвестно', level: 0, game_id: '?', xp_day: '-', 
     max_lottery: 0, coins: 0, rubies: 0, xp_total: 0, xp_today: 0, 
@@ -26,12 +26,15 @@ class DBManager {
         this.db.pragma('journal_mode = WAL');
         this.db.pragma('busy_timeout = 10000');
         
-        // 🚀 ЭТАП 1: Хранилище для предкомпилированных запросов
+        // Хранилище для предкомпилированных запросов
         this.stmts = {}; 
         
         this.init();
     }
 
+    // ==========================================
+    // 1. ИНИЦИАЛИЗАЦИЯ И СХЕМА БД
+    // ==========================================
     init() {
         this.db.exec(`CREATE TABLE IF NOT EXISTS accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +85,7 @@ class DBManager {
             FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
         )`);
 
-        // 🚀 ЭТАП 3: Умные миграции колонок (без костыльных try/catch)
+        // Умные миграции колонок (без костыльных try/catch)
         this._ensureColumnExists('profile', 'interior', 'TEXT DEFAULT "{}"');
         this._ensureColumnExists('profile', 'storeroom', 'TEXT DEFAULT "{}"');
         this._ensureColumnExists('profile', 'is_building', 'INTEGER DEFAULT 0');
@@ -112,19 +115,11 @@ class DBManager {
             lotteries TEXT
         )`);
 
-        const changes = this.db.prepare(`DELETE FROM timers WHERE key IS NULL OR key = 'null'`).run().changes;
-        if (changes > 0) {
-            console.log(`🧹 База данных очищена: удалено ${changes} мусорных строк из таблицы таймеров!`);
-        }
-
-        this.seedZavalinka();
-        this.seedInteriorItems();
-
-        // Запускаем компиляцию частых запросов
-        this._prepareStatements();
+        // Передаем эстафету в пост-инициализацию
+        this._postInitSetup();
     }
 
-    // 🚀 ЭТАП 3: Хелпер для безопасного обновления таблиц "на лету"
+    // Хелпер для безопасного обновления таблиц "на лету"
     _ensureColumnExists(tableName, columnName, columnDef) {
         const columns = this.db.pragma(`table_info(${tableName})`);
         const exists = columns.some(col => col.name === columnName);
@@ -134,7 +129,22 @@ class DBManager {
         }
     }
 
-    // 🚀 ЭТАП 1: Компилируем запросы один раз и держим их в памяти
+    // ==========================================
+    // 2. ПОДГОТОВКА ДАННЫХ И КЭША
+    // ==========================================
+    _postInitSetup() {
+        const changes = this.db.prepare(`DELETE FROM timers WHERE key IS NULL OR key = 'null'`).run().changes;
+        if (changes > 0) {
+            console.log(`🧹 База данных очищена: удалено ${changes} мусорных строк из таблицы таймеров!`);
+        }
+
+        this.seedZavalinka();
+        this.seedInteriorItems();
+
+        this._prepareStatements();
+    }
+
+    // Компилируем запросы один раз и держим их в памяти
     _prepareStatements() {
         this.stmts.saveTimer = this.db.prepare('INSERT OR REPLACE INTO timers (account_id, key, value) VALUES (?, ?, ?)');
         this.stmts.getTimer = this.db.prepare('SELECT value FROM timers WHERE account_id = ? AND key = ?');
@@ -193,6 +203,9 @@ class DBManager {
         })();
     }
 
+    // ==========================================
+    // 3. УПРАВЛЕНИЕ АККАУНТАМИ
+    // ==========================================
     addAccount(username, password) {
         try {
             const stmt = this.db.prepare('INSERT INTO accounts (username, password) VALUES (?, ?)');
@@ -216,6 +229,9 @@ class DBManager {
         this.db.prepare('DELETE FROM profile WHERE account_id = ?').run(id);
     }
 
+    // ==========================================
+    // 4. ТАЙМЕРЫ И НАСТРОЙКИ (KEY-VALUE)
+    // ==========================================
     saveTimer(accountId, key, value) {
         this.stmts.saveTimer.run(accountId, key, value);
     }
@@ -244,7 +260,9 @@ class DBManager {
         return row ? row.value : null;
     }
 
-    // 🚀 ЭТАП 2: Вспомогательные методы для работы с JSON
+    // ==========================================
+    // 5. РАБОТА С ПРОФИЛЕМ (JSON)
+    // ==========================================
     _parseJson(data) {
         if (typeof data === 'object' && data !== null) return data;
         try { return JSON.parse(data) || {}; } catch (e) { return {}; }
@@ -255,7 +273,6 @@ class DBManager {
         try { return JSON.stringify(data || {}); } catch (e) { return '{}'; }
     }
 
-    // 🚀 ЭТАП 2: Очищенный метод получения профиля
     getProfile(accountId) {
         const row = this.stmts.getProfile.get(accountId);
         if (row) {
@@ -264,10 +281,9 @@ class DBManager {
             row.storeroom = this._parseJson(row.storeroom);
             return row;
         }
-        return { ...DEFAULT_PROFILE }; // Возвращаем копию дефолтного профиля
+        return { ...DEFAULT_PROFILE }; 
     }
 
-    // 🚀 ЭТАП 2: Очищенный метод сохранения профиля
     saveProfile(accountId, data) {
         const current = this.getProfile(accountId);
         const merged = { ...current, ...data };
@@ -284,6 +300,9 @@ class DBManager {
         );
     }
 
+    // ==========================================
+    // 6. ПОИСКОВЫЕ МЕТОДЫ (ЗАГАДКИ И СКИПЫ)
+    // ==========================================
     findRiddleAnswer(text) {
         const riddles = this.stmts.getRiddles.all();
         for (let r of riddles) {
