@@ -6,6 +6,14 @@ const fs = require('fs');
 const seedData = require('./SeedData');
 const seedItems = require('./house/SeedItems'); 
 
+// 🚀 ЭТАП 2: Вынесли дефолтный профиль в константу для чистоты кода
+const DEFAULT_PROFILE = {
+    nickname: 'Неизвестно', level: 0, game_id: '?', xp_day: '-', 
+    max_lottery: 0, coins: 0, rubies: 0, xp_total: 0, xp_today: 0, 
+    xp_start_day: 0, last_xp_update: 0, materials: {}, interior: {}, 
+    storeroom: {}, is_building: 0
+};
+
 class DBManager {
     constructor() {
         const dataDir = path.join(__dirname, '../data');
@@ -92,7 +100,7 @@ class DBManager {
             materials TEXT,
             interior TEXT,
             storeroom TEXT, 
-            is_building INTEGER DEFAULT 0, -- 🏠 Добавили статус стройки Домика в схему
+            is_building INTEGER DEFAULT 0,
             FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
         )`);
 
@@ -215,7 +223,6 @@ class DBManager {
         this.db.prepare('DELETE FROM profile WHERE account_id = ?').run(id);
     }
 
-    // 🚀 Используем скомпилированные запросы
     saveTimer(accountId, key, value) {
         this.stmts.saveTimer.run(accountId, key, value);
     }
@@ -244,29 +251,42 @@ class DBManager {
         return row ? row.value : null;
     }
 
+    // 🚀 ЭТАП 2: Вспомогательные методы для работы с JSON
+    _parseJson(data) {
+        if (typeof data === 'object' && data !== null) return data;
+        try { return JSON.parse(data) || {}; } catch (e) { return {}; }
+    }
+
+    _stringifyJson(data) {
+        if (typeof data === 'string') return data;
+        try { return JSON.stringify(data || {}); } catch (e) { return '{}'; }
+    }
+
+    // 🚀 ЭТАП 2: Очищенный метод получения профиля
     getProfile(accountId) {
         const row = this.stmts.getProfile.get(accountId);
         if (row) {
-            if (row.materials) { try { row.materials = JSON.parse(row.materials); } catch (e) { row.materials = {}; } } else { row.materials = {}; }
-            if (row.interior) { try { row.interior = JSON.parse(row.interior); } catch (e) { row.interior = {}; } } else { row.interior = {}; }
-            if (row.storeroom) { try { row.storeroom = JSON.parse(row.storeroom); } catch (e) { row.storeroom = {}; } } else { row.storeroom = {}; }
+            row.materials = this._parseJson(row.materials);
+            row.interior = this._parseJson(row.interior);
+            row.storeroom = this._parseJson(row.storeroom);
             return row;
         }
-        return { nickname: 'Неизвестно', level: 0, game_id: '?', xp_day: '-', max_lottery: 0, coins: 0, rubies: 0, xp_total: 0, xp_today: 0, xp_start_day: 0, last_xp_update: 0, materials: {}, interior: {}, storeroom: {}, is_building: 0 };
+        return { ...DEFAULT_PROFILE }; // Возвращаем копию дефолтного профиля
     }
 
+    // 🚀 ЭТАП 2: Очищенный метод сохранения профиля
     saveProfile(accountId, data) {
         const current = this.getProfile(accountId);
         const merged = { ...current, ...data };
         
-        let matStr = typeof merged.materials === 'object' ? JSON.stringify(merged.materials) : merged.materials;
-        let intStr = typeof merged.interior === 'object' ? JSON.stringify(merged.interior) : merged.interior;
-        let storeStr = typeof merged.storeroom === 'object' ? JSON.stringify(merged.storeroom) : merged.storeroom;
+        let matStr = this._stringifyJson(merged.materials);
+        let intStr = this._stringifyJson(merged.interior);
+        let storeStr = this._stringifyJson(merged.storeroom);
         
         this.stmts.saveProfile.run(
             accountId, merged.nickname, merged.level, merged.game_id, merged.xp_day, 
             merged.max_lottery, merged.coins, merged.rubies, merged.xp_total, merged.xp_today, 
-            merged.xp_start_day, merged.last_xp_update, matStr || '{}', intStr || '{}', storeStr || '{}',
+            merged.xp_start_day, merged.last_xp_update, matStr, intStr, storeStr,
             merged.is_building ? 1 : 0 
         );
     }
