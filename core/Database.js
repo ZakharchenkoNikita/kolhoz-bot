@@ -61,29 +61,7 @@ class DBManager {
             FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
         )`);
 
-        // 🛠️ МИГРАЦИЯ: Добавляем колонки для Домика
-        try {
-            this.db.prepare('SELECT interior FROM profile LIMIT 1').get();
-        } catch (e) {
-            console.log('🛠️ Обновляем таблицу профилей: добавляем колонку для интерьера...');
-            try { this.db.exec('ALTER TABLE profile ADD COLUMN interior TEXT DEFAULT "{}"'); } catch (err) {}
-        }
-
-        try {
-            this.db.prepare('SELECT storeroom FROM profile LIMIT 1').get();
-        } catch (e) {
-            console.log('🛠️ Обновляем таблицу профилей: добавляем колонку для Чулана...');
-            try { this.db.exec('ALTER TABLE profile ADD COLUMN storeroom TEXT DEFAULT "{}"'); } catch (err) {}
-        }
-
-        // 🏠 МИГРАЦИЯ: Автоматическое добавление колонки статуса стройки для старых баз
-        try {
-            this.db.prepare('SELECT is_building FROM profile LIMIT 1').get();
-        } catch (e) {
-            console.log('🛠️ Обновляем таблицу профилей: добавляем колонку для статуса стройки Домика...');
-            try { this.db.exec('ALTER TABLE profile ADD COLUMN is_building INTEGER DEFAULT 0'); } catch (err) {}
-        }
-
+        // Создаем таблицу профилей
         this.db.exec(`CREATE TABLE IF NOT EXISTS profile (
             account_id INTEGER PRIMARY KEY,
             nickname TEXT,
@@ -103,6 +81,11 @@ class DBManager {
             is_building INTEGER DEFAULT 0,
             FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
         )`);
+
+        // 🚀 ЭТАП 3: Умные миграции колонок (без костыльных try/catch)
+        this._ensureColumnExists('profile', 'interior', 'TEXT DEFAULT "{}"');
+        this._ensureColumnExists('profile', 'storeroom', 'TEXT DEFAULT "{}"');
+        this._ensureColumnExists('profile', 'is_building', 'INTEGER DEFAULT 0');
 
         this.db.exec(`CREATE TABLE IF NOT EXISTS riddles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,6 +122,16 @@ class DBManager {
 
         // Запускаем компиляцию частых запросов
         this._prepareStatements();
+    }
+
+    // 🚀 ЭТАП 3: Хелпер для безопасного обновления таблиц "на лету"
+    _ensureColumnExists(tableName, columnName, columnDef) {
+        const columns = this.db.pragma(`table_info(${tableName})`);
+        const exists = columns.some(col => col.name === columnName);
+        if (!exists) {
+            console.log(`🛠️ Миграция БД: добавляем колонку '${columnName}' в таблицу '${tableName}'...`);
+            this.db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+        }
     }
 
     // 🚀 ЭТАП 1: Компилируем запросы один раз и держим их в памяти
