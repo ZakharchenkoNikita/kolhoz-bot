@@ -1,0 +1,140 @@
+/* Базовые настройки и цвета Apple Dark Mode */
+:root {
+    --bg-color: #000000;
+    --glass-bg: rgba(30, 30, 32, 0.65);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-main: #ffffff;
+    --text-muted: rgba(255, 255, 255, 0.6);
+    --apple-green: #32d74b;
+    --apple-blue: #0a84ff;
+}
+
+body {
+    margin: 0; padding: 0;
+    background-color: var(--bg-color); color: var(--text-main);
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh; overflow-x: hidden;
+}
+
+/* Красивые пятна на фоне под стеклом */
+.bg-shape { position: fixed; border-radius: 50%; filter: blur(80px); z-index: -1; opacity: 0.5; }
+.shape-1 { top: -10%; left: -10%; width: 40vw; height: 40vw; background: radial-gradient(circle, #5e5ce6, #0a84ff); }
+.shape-2 { bottom: -10%; right: -10%; width: 50vw; height: 50vw; background: radial-gradient(circle, #ff9f0a, #ff453a); }
+
+/* Контейнер */
+.app-container { max-width: 1000px; margin: 0 auto; padding: 30px 20px; }
+
+/* Эффект матового стекла */
+.glass-panel { background: var(--glass-bg); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid var(--glass-border); border-radius: 20px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); }
+
+/* Шапка и Кастомное выпадающее меню */
+.header { position: relative; z-index: 100; display: flex; justify-content: space-between; align-items: center; padding: 20px 30px; margin-bottom: 30px; }
+.header-info { position: relative; }
+.header-title-row { display: flex; align-items: center; gap: 8px; cursor: pointer; transition: opacity 0.2s; user-select: none; }
+.header-title-row:hover { opacity: 0.7; }
+.header-title-row h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+.chevron-icon { transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); margin-top: 4px; }
+.chevron-icon.open { transform: rotate(-180deg); }
+
+.subtitle { margin: 5px 0 0 0; color: var(--apple-green); font-weight: 500; font-size: 14px; }
+
+.kb-account-dropdown { position: absolute; top: 100%; left: 0; margin-top: 15px; width: 300px; background: rgba(30, 30, 32, 0.85); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid var(--glass-border); border-radius: 18px; box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5); opacity: 0; pointer-events: none; transform: translateY(-10px) scale(0.98); transform-origin: top left; transition: all 0.3s cubic-bezier(.23,1,.32,1); z-index: 100; overflow: hidden; display: flex; flex-direction: column; }
+.kb-account-dropdown.active { opacity: 1; pointer-events: all; transform: translateY(0) scale(1); }
+.kb-dropdown-list { max-height: 300px; overflow-y: auto; }
+.kb-dropdown-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--glass-border); cursor: pointer; transition: background 0.2s; }
+.kb-dropdown-item:hover { background: rgba(255,255,255,0.06); }
+.kb-dropdown-item.active-acc { background: rgba(10, 132, 255, 0.15); }
+.kb-dropdown-add { display: flex; align-items: center; gap: 10px; padding: 16px 18px; color: var(--apple-blue); font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 15px; background: rgba(0,0,0,0.2); }
+.kb-dropdown-add:hover { background: rgba(255,255,255,0.05); }
+
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.kb-action-icon { color: var(--text-muted); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+.kb-action-icon:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.15); transform: scale(1.05); }
+.kb-action-icon:active { transform: scale(0.95); }
+
+/* Сетка и Карточки */
+.modules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.module-card { padding: 20px; transition: transform 0.2s ease, box-shadow 0.2s ease; display: flex; flex-direction: column; gap: 16px; }
+.module-card:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4); }
+
+.module-header { display: flex; justify-content: space-between; align-items: center; }
+.module-title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.3px; color: var(--text-main); white-space: nowrap; }
+
+.module-controls { display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transform: translateX(10px); transition: opacity 0.3s ease, transform 0.3s ease; }
+.module-card:hover .module-controls { opacity: 1; pointer-events: all; transform: translateX(0); }
+@media (hover: none) { .module-controls { opacity: 1; pointer-events: all; transform: translateX(0); } }
+
+.btn-reset { color: var(--text-muted); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: 0.2s; }
+.btn-reset:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.15); transform: scale(1.05); }
+.btn-reset:active { transform: scale(0.95); }
+.btn-reset svg { width: 14px; height: 14px; }
+
+/* Тело карточки */
+.module-body { display: flex; flex-direction: column; gap: 12px; margin-top: 5px; }
+.timer-details { display: flex; flex-direction: column; justify-content: center; }
+.timer { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; line-height: 1; margin-bottom: 4px; }
+.status { font-size: 13px; font-weight: 500; color: var(--text-muted); min-height: 16px; }
+
+/* Progress Bar */
+.progress-track { width: 100%; height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden; }
+.progress-fill { height: 100%; width: var(--p, 0%); background: var(--prog-color, var(--apple-blue)); border-radius: 6px; transition: background-color 0.4s ease; }
+
+/* Тумблер iOS */
+.ios-switch { position: relative; display: inline-block; width: 44px; height: 24px; margin: 0; }
+.ios-switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(120, 120, 128, 0.32); transition: .3s; border-radius: 30px; }
+.slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+input:checked + .slider { background-color: var(--apple-green); }
+input:checked + .slider:before { transform: translateX(20px); }
+
+/* --- МОДАЛЬНОЕ ОКНО И НАСТРОЙКИ --- */
+.kb-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); z-index: 999; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
+.kb-modal-backdrop.active { opacity: 1; pointer-events: all; }
+.kb-modal { position: fixed; top: 50%; left: 50%; width: 100%; max-width: 700px; height: 85vh; max-height: 750px; background: rgba(20,20,22,0.85); backdrop-filter: blur(35px); -webkit-backdrop-filter: blur(35px); z-index: 1000; display: flex; flex-direction: column; border-radius: 24px; border: 1px solid var(--glass-border); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); transform: translate(-50%, 60%) scale(0.95); opacity: 0; pointer-events: none; transition: transform 0.4s cubic-bezier(.23,1,.32,1), opacity 0.4s; }
+.kb-modal.active { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: all; }
+.kb-nav-header { padding: 14px 20px; border-bottom: 1px solid var(--glass-border); background: transparent; }
+.kb-nav-top { position: relative; display: flex; align-items: center; justify-content: center; height: 32px; }
+.kb-nav-title-ios { font-size: 17px; font-weight: 600; color: var(--text-main); letter-spacing: -0.4px; }
+.kb-nav-back-circle { position: absolute; left: 0; width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; border: 1px solid var(--glass-border); }
+.kb-nav-back-circle:hover { background: rgba(255,255,255,0.2); }
+.kb-nav-close { position: absolute; right: 0; font-size: 16px; color: var(--apple-blue); cursor: pointer; font-weight: 600; }
+.kb-modal-body { flex: 1; overflow-y: auto; padding: 20px 0; }
+.kb-nav-page { display: none; }
+.kb-ios-group-title { font-size: 13px; text-transform: uppercase; color: var(--text-muted); margin: 20px 20px 8px 20px; font-weight: 600; }
+.kb-ios-card { background: rgba(255,255,255,0.06); border-radius: 14px; overflow: hidden; margin: 0 16px; border: 1px solid var(--glass-border); display: flex; flex-direction: column; }
+.kb-ios-row { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; font-size: 16px; color: var(--text-main); cursor: pointer; transition: background 0.2s; }
+.kb-ios-row:hover { background: rgba(255,255,255,0.1); }
+.kb-ios-row:not(:last-child)::after { content: ''; position: absolute; bottom: 0; left: 54px; right: 0; height: 1px; background: var(--glass-border); }
+.kb-ios-chevron { color: var(--text-muted); font-size: 22px; font-weight: 300; line-height: 1; margin-left: 8px; }
+.kb-ios-icon-wrap { display: flex; align-items: center; gap: 14px; pointer-events: none; }
+.kb-ios-icon { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+
+/* Drag & Drop */
+.kb-draggable-list-item { cursor: grab; }
+.kb-draggable-list-item:active { cursor: grabbing; }
+.kb-draggable-list-item.is-dragging { opacity: 0.6; transform: scale(0.98); z-index: 999; border-radius: 14px; background: rgba(255,255,255,0.1) !important; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+.is-drag-active .kb-draggable-list-item * { pointer-events: none !important; }
+
+/* --- КНОПКИ ЛОТЕРЕИ --- */
+.kb-mini-btn { width: 26px; height: 26px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; opacity: 0.6; transition: all 0.2s ease; border: 1px solid var(--glass-border); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+.kb-mini-btn:hover { opacity: 1; background: rgba(255,255,255,0.2); transform: scale(1.05); }
+.kb-mini-btn.active { opacity: 1; background: rgba(255,255,255,0.3); border-color: var(--apple-blue); box-shadow: 0 0 12px rgba(10,132,255,0.4); transform: scale(1.1); }
+
+/* 🏠 Стили для Домика */
+.house-container { margin-top: 20px; padding: 0 15px 30px 15px; max-width: 1000px; margin-left: auto; margin-right: auto; }
+.house-card { background: var(--glass-bg); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid var(--glass-border); border-radius: 20px; padding: 20px; }
+.house-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid var(--glass-border); }
+.house-title { font-size: 18px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+.house-status { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px; }
+.status-building { background: rgba(255, 159, 10, 0.2); color: #ff9f0a; }
+.status-gathering { background: rgba(50, 215, 75, 0.2); color: var(--apple-green); }
+.materials-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+.mat-item { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.mat-item.done { opacity: 0.4; }
+.mat-top { display: flex; align-items: center; gap: 8px; }
+.mat-icon { color: var(--apple-blue); display: flex; }
+.mat-name { font-size: 13px; font-weight: 600; }
+.mat-progress-text { font-size: 11px; color: var(--text-muted); }
+.mat-bar-bg { width: 100%; height: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
+.mat-bar-fill { height: 100%; background: var(--apple-blue); transition: width 0.5s ease; }
+.mat-item.done .mat-bar-fill { background: var(--apple-green); }
