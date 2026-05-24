@@ -35,6 +35,19 @@ export function initDashboard() {
                 </div>
                 <div style="width: 1px; height: 18px; background: var(--glass-border); margin: 0 2px;"></div>
             `;
+        } else if (mod.id === 'heli') {
+            let currentTarget = (State.global && State.global.heliTarget) ? State.global.heliTarget : 'thunder_or_alt';
+            extraControls = `
+                <div style="display: flex; gap: 4px;">
+                    <div class="kb-mini-btn heli-target ${currentTarget === 'only_hawk' ? 'active' : ''}" title="Только Ястреб" onclick="window.setHeliTarget('only_hawk', event)">
+                        <img src="https://sadovnik.mobi/images/hawk1.png" alt="Ястреб" style="width: 18px; height: 18px; object-fit: contain;">
+                    </div>
+                    <div class="kb-mini-btn heli-target ${currentTarget === 'thunder_or_alt' ? 'active' : ''}" title="Гром и аналоги" onclick="window.setHeliTarget('thunder_or_alt', event)">
+                        <img src="https://sadovnik.mobi/images/grom1.png" alt="Гром" style="width: 18px; height: 18px; object-fit: contain;">
+                    </div>
+                </div>
+                <div style="width: 1px; height: 18px; background: var(--glass-border); margin: 0 2px;"></div>
+            `;
         }
 
         card.innerHTML = `
@@ -106,7 +119,6 @@ function handleLotteryUI(ui, globalState, timeInfo, percent) {
 }
 
 function handleNurseryUI(ui, globalState, timeInfo, percent) {
-    // Применяется только в режиме обычного ожидания таймера
     if (!timeInfo.isMax && !timeInfo.isReady && globalState.nursery_tasks) {
         let tasksArr = Object.values(globalState.nursery_tasks);
         if (tasksArr.length > 0) {
@@ -126,17 +138,23 @@ function handleNurseryUI(ui, globalState, timeInfo, percent) {
 }
 
 function handleUpgraderUI(ui, globalState, timeInfo, percent) {
-    // Применяется только в режиме обычного ожидания таймера
     if (!timeInfo.isMax && !timeInfo.isReady && globalState.upgrade_info) {
         ui.statusText = globalState.upgrade_info;
     }
+}
+
+function handleHeliUI(ui, globalState, timeInfo, percent) {
+    // В будущем здесь можно управлять текстом статуса для вертолета,
+    // например, указывать, какой именно вертолет мы ждем.
+    // Сейчас стратегия просто зарегистрирована и использует базовый UI.
 }
 
 // Словарь роутинга кастомных стратегий отображения
 const UI_STRATEGIES = {
     'lottery': handleLotteryUI,
     'nursery': handleNurseryUI,
-    'upgrader': handleUpgraderUI
+    'upgrader': handleUpgraderUI,
+    'heli': handleHeliUI
 };
 
 // ==========================================
