@@ -1,7 +1,7 @@
 import { State } from './state.js';
 import { initDashboard } from './ui.js';
 import { renderSettingsList } from './settings.js';
-import { modulesConfig } from './utils.js'; // 🛠️ ИСПРАВЛЕНО: Забытый импорт!
+import { modulesConfig } from './utils.js'; 
 
 export async function setLotteryPrio(prio, event) {
     event.stopPropagation();
@@ -18,6 +18,31 @@ export async function setLotteryPrio(prio, event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accountId: State.accountId, key: 'lot_prio', value: prio })
     });
+}
+
+// 🚁 ДОБАВЛЕНО: Чистая функция для настройки вертолетов
+export async function setHeliTarget(target, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    if (!State.accountId) return;
+
+    // Мгновенный визуальный отклик интерфейса
+    let card = event.target.closest('.module-card');
+    if (card) {
+        card.querySelectorAll('.heli-target').forEach(btn => btn.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+    }
+
+    if (State.global) State.global.heliTarget = target;
+
+    await fetch('/api/account-setting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: State.accountId, key: 'heli_target', value: target })
+    });
+    fetchState();
 }
 
 export async function toggleModule(moduleId, isEnabled) {
@@ -105,7 +130,7 @@ export async function fetchState() {
             if (toggleEl && toggleEl.checked !== isEnabled) toggleEl.checked = isEnabled;
         });
     } catch (e) {
-        console.error("Ошибка обновления стейта:", e); // Будет писать в консоль F12, в чем реальная причина падения
+        console.error("Ошибка обновления стейта:", e); 
         State.global = null;
         statusText.innerText = "🔴 Сервер недоступен"; statusText.style.color = "var(--apple-blue)";
     }
