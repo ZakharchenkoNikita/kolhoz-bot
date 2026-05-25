@@ -6,6 +6,86 @@ import { VectorIcons, MaterialIcons, MaterialNames, modulesConfig, formatTime, g
 // ==========================================
 const DOM = {};
 
+// ==========================================
+// ФАБРИКА ВИДЖЕТОВ: Сборка динамического окна настроек
+// ==========================================
+function buildModuleSettingsHtml(modId) {
+    let title = '';
+    let content = '';
+
+    if (modId === 'lottery') {
+        title = 'Настройки Лотереи';
+        let currentPrio = (State.global && State.global.lotPrio) ? State.global.lotPrio : 'price';
+        // Пока используем заглушку, на следующем шаге добавим сохранение в бэкенд
+        let buyTickets = (State.global && State.global.lotBuyTickets !== false); 
+
+        content = `
+            <div class="settings-row">
+                <span class="settings-label">Покупать билеты</span>
+                <label class="ios-switch">
+                    <input type="checkbox" ${buyTickets ? 'checked' : ''} onchange="window.setLotteryTickets(this.checked, event)">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="settings-row" style="margin-top: 15px;">
+                <span class="settings-label">Приоритет:</span>
+                <div style="display: flex; gap: 4px;">
+                    <div class="kb-mini-btn lot-prio ${currentPrio === 'price' ? 'active' : ''}" title="Снижать цену" onclick="window.setLotteryPrio('price', event)">${VectorIcons.moneyBag}</div>
+                    <div class="kb-mini-btn lot-prio ${currentPrio === 'exp' ? 'active' : ''}" title="Растить выигрыш" onclick="window.setLotteryPrio('exp', event)">${VectorIcons.star}</div>
+                    <div class="kb-mini-btn lot-prio ${currentPrio === 'limit' ? 'active' : ''}" title="Увеличить лимит" onclick="window.setLotteryPrio('limit', event)">${VectorIcons.ticket}</div>
+                </div>
+            </div>
+        `;
+    } else if (modId === 'heli') {
+        title = 'Настройки Вертолета';
+        let currentTarget = (State.global && State.global.heliTarget) ? State.global.heliTarget : 'thunder_or_alt';
+        
+        content = `
+            <div class="settings-row">
+                <span class="settings-label">Цель для вызова:</span>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 10px;">
+                <div class="kb-mini-btn heli-target ${currentTarget === 'only_hawk' ? 'active' : ''}" style="flex: 1; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="window.setHeliTarget('only_hawk', event)">
+                    <img src="https://sadovnik.mobi/images/hawk1.png" style="width: 18px; height: 18px; object-fit: contain;">
+                    <span style="font-size: 14px; font-weight: 500;">Ястреб</span>
+                </div>
+                <div class="kb-mini-btn heli-target ${currentTarget === 'thunder_or_alt' ? 'active' : ''}" style="flex: 1; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="window.setHeliTarget('thunder_or_alt', event)">
+                    <img src="https://sadovnik.mobi/images/grom1.png" style="width: 18px; height: 18px; object-fit: contain;">
+                    <span style="font-size: 14px; font-weight: 500;">Гром</span>
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="settings-overlay-header">
+            <div class="settings-overlay-title">${title}</div>
+            <button class="btn-close-settings" onclick="window.toggleModuleSettings('${modId}', event)">
+                ${VectorIcons.close}
+            </button>
+        </div>
+        <div class="settings-overlay-content">
+            ${content}
+        </div>
+    `;
+}
+
+// Глобальная функция для открытия/закрытия шторки
+window.toggleModuleSettings = function(modId, event) {
+    if(event) event.stopPropagation();
+    const card = document.getElementById(`card-${modId}`);
+    const overlay = document.getElementById(`settings-overlay-${modId}`);
+    if(!card || !overlay) return;
+
+    // Собираем свежие данные и показываем шторку
+    if (!card.classList.contains('show-settings')) {
+        overlay.innerHTML = buildModuleSettingsHtml(modId);
+        card.classList.add('show-settings');
+    } else {
+        card.classList.remove('show-settings');
+    }
+};
+
 export function initDashboard() {
     const container = document.getElementById('modules-container');
     const svgReset = document.getElementById('svg-reset').innerHTML;
@@ -24,29 +104,13 @@ export function initDashboard() {
         const emoji = mod.name.split(' ')[0];
         const title = mod.name.substring(mod.name.indexOf(' ') + 1);
         
-        let extraControls = '';
-        if (mod.id === 'lottery') {
-            let currentPrio = (State.global && State.global.lotPrio) ? State.global.lotPrio : 'price';
-            extraControls = `
-                <div style="display: flex; gap: 4px;">
-                    <div class="kb-mini-btn lot-prio ${currentPrio === 'price' ? 'active' : ''}" title="Снижать цену" onclick="window.setLotteryPrio('price', event)">${VectorIcons.moneyBag}</div>
-                    <div class="kb-mini-btn lot-prio ${currentPrio === 'exp' ? 'active' : ''}" title="Растить выигрыш" onclick="window.setLotteryPrio('exp', event)">${VectorIcons.star}</div>
-                    <div class="kb-mini-btn lot-prio ${currentPrio === 'limit' ? 'active' : ''}" title="Увеличить лимит" onclick="window.setLotteryPrio('limit', event)">${VectorIcons.ticket}</div>
-                </div>
-                <div style="width: 1px; height: 18px; background: var(--glass-border); margin: 0 2px;"></div>
-            `;
-        } else if (mod.id === 'heli') {
-            let currentTarget = (State.global && State.global.heliTarget) ? State.global.heliTarget : 'thunder_or_alt';
-            extraControls = `
-                <div style="display: flex; gap: 4px;">
-                    <div class="kb-mini-btn heli-target ${currentTarget === 'only_hawk' ? 'active' : ''}" title="Только Ястреб" onclick="window.setHeliTarget('only_hawk', event)">
-                        <img src="https://sadovnik.mobi/images/hawk1.png" alt="Ястреб" style="width: 18px; height: 18px; object-fit: contain;">
-                    </div>
-                    <div class="kb-mini-btn heli-target ${currentTarget === 'thunder_or_alt' ? 'active' : ''}" title="Гром и аналоги" onclick="window.setHeliTarget('thunder_or_alt', event)">
-                        <img src="https://sadovnik.mobi/images/grom1.png" alt="Гром" style="width: 18px; height: 18px; object-fit: contain;">
-                    </div>
-                </div>
-                <div style="width: 1px; height: 18px; background: var(--glass-border); margin: 0 2px;"></div>
+        // Очистили жестко заданные элементы управления. Только шестеренка.
+        let gearBtn = '';
+        if (mod.id === 'lottery' || mod.id === 'heli') {
+            gearBtn = `
+                <button class="btn-reset" onclick="window.toggleModuleSettings('${mod.id}', event)" title="Настройки">
+                    ${VectorIcons.gear}
+                </button>
             `;
         }
 
@@ -56,7 +120,7 @@ export function initDashboard() {
                     <span>${emoji}</span> ${title}
                 </div>
                 <div class="module-controls">
-                    ${extraControls}
+                    ${gearBtn}
                     <button class="btn-reset" onclick="window.resetModule('${mod.id}')" title="Сбросить таймер">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${svgReset}</svg>
                     </button>
@@ -75,6 +139,7 @@ export function initDashboard() {
                     <div class="progress-fill" id="prog-${mod.id}"></div>
                 </div>
             </div>
+            <div class="module-settings-overlay" id="settings-overlay-${mod.id}"></div>
         `;
         container.appendChild(card);
 
@@ -96,7 +161,6 @@ function handleLotteryUI(ui, globalState, timeInfo, percent) {
     let ticketTime = globalState.timers.lotteryTicket || 0;
     let ticketInfo = formatTime(ticketTime);
 
-    // Сценарий Б: Полностью вкачана
     if (timeInfo.isMax) {
         ui.timerText = ticketInfo.isReady ? "Билет готов!" : ticketInfo.text;
         ui.timerColor = ticketInfo.isReady ? "var(--apple-green)" : "var(--text-main)";
@@ -107,7 +171,6 @@ function handleLotteryUI(ui, globalState, timeInfo, percent) {
         ui.progWidth = `${ticketPercent}%`;
         ui.progColor = ticketInfo.isReady ? "var(--apple-green)" : "var(--apple-blue)";
     } 
-    // Сценарий А: Идет прокачка, модуль в режиме ожидания таймера
     else if (!timeInfo.isReady) {
         if (ticketInfo.isReady) {
             ui.statusText = "Билет: Готово!";
@@ -144,12 +207,8 @@ function handleUpgraderUI(ui, globalState, timeInfo, percent) {
 }
 
 function handleHeliUI(ui, globalState, timeInfo, percent) {
-    // В будущем здесь можно управлять текстом статуса для вертолета,
-    // например, указывать, какой именно вертолет мы ждем.
-    // Сейчас стратегия просто зарегистрирована и использует базовый UI.
 }
 
-// Словарь роутинга кастомных стратегий отображения
 const UI_STRATEGIES = {
     'lottery': handleLotteryUI,
     'nursery': handleNurseryUI,
@@ -181,7 +240,6 @@ function calculateModuleUI(modId, globalState) {
     const timeInfo = formatTime(targetTime);
     const percent = targetTime === -1 ? 100 : getRingPercent(modId, targetTime);
     
-    // Формируем базовый скелет интерфейса
     let ui = {
         opacity: "1",
         timerText: timeInfo.text, timerColor: "",
@@ -204,7 +262,6 @@ function calculateModuleUI(modId, globalState) {
         ui.progColor = percent > 90 ? "#ff9f0a" : "var(--apple-blue)";
     }
 
-    // Если для модуля зарегистрирована индивидуальная стратегия — применяем её поверх базы
     if (UI_STRATEGIES[modId]) {
         UI_STRATEGIES[modId](ui, globalState, timeInfo, percent);
     }
@@ -221,10 +278,8 @@ export function renderLoop() {
             const el = DOM[mod.id];
             if (!el) return; 
 
-            // 1. Получаем чистую готовую инструкцию от конвейера
             const uiConfig = calculateModuleUI(mod.id, State.global);
 
-            // 2. Моментально применяем стили через прямые ссылки из кэша
             el.card.style.opacity = uiConfig.opacity;
             el.timer.innerText = uiConfig.timerText;
             el.timer.style.color = uiConfig.timerColor;
