@@ -7,7 +7,7 @@ import { VectorIcons, MaterialIcons, MaterialNames, modulesConfig, formatTime, g
 const DOM = {};
 
 // ==========================================
-// ФАБРИКА ВИДЖЕТОВ: Сборка динамического окна настроек
+// ФАБРИКА ВИДЖЕТОВ: Сборка ультра-компактного окна настроек
 // ==========================================
 function buildModuleSettingsHtml(modId) {
     let title = '';
@@ -16,7 +16,6 @@ function buildModuleSettingsHtml(modId) {
     if (modId === 'lottery') {
         title = 'Настройки Лотереи';
         let currentPrio = (State.global && State.global.lotPrio) ? State.global.lotPrio : 'price';
-        // Пока используем заглушку, на следующем шаге добавим сохранение в бэкенд
         let buyTickets = (State.global && State.global.lotBuyTickets !== false); 
 
         content = `
@@ -27,8 +26,8 @@ function buildModuleSettingsHtml(modId) {
                     <span class="slider"></span>
                 </label>
             </div>
-            <div class="settings-row" style="margin-top: 15px;">
-                <span class="settings-label">Приоритет:</span>
+            <div class="settings-row">
+                <span class="settings-label">Приоритет</span>
                 <div style="display: flex; gap: 4px;">
                     <div class="kb-mini-btn lot-prio ${currentPrio === 'price' ? 'active' : ''}" title="Снижать цену" onclick="window.setLotteryPrio('price', event)">${VectorIcons.moneyBag}</div>
                     <div class="kb-mini-btn lot-prio ${currentPrio === 'exp' ? 'active' : ''}" title="Растить выигрыш" onclick="window.setLotteryPrio('exp', event)">${VectorIcons.star}</div>
@@ -41,17 +40,17 @@ function buildModuleSettingsHtml(modId) {
         let currentTarget = (State.global && State.global.heliTarget) ? State.global.heliTarget : 'thunder_or_alt';
         
         content = `
-            <div class="settings-row">
-                <span class="settings-label">Цель для вызова:</span>
-            </div>
-            <div style="display: flex; gap: 8px; margin-top: 10px;">
-                <div class="kb-mini-btn heli-target ${currentTarget === 'only_hawk' ? 'active' : ''}" style="flex: 1; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="window.setHeliTarget('only_hawk', event)">
-                    <img src="https://sadovnik.mobi/images/hawk1.png" style="width: 18px; height: 18px; object-fit: contain;">
-                    <span style="font-size: 14px; font-weight: 500;">Ястреб</span>
-                </div>
-                <div class="kb-mini-btn heli-target ${currentTarget === 'thunder_or_alt' ? 'active' : ''}" style="flex: 1; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="window.setHeliTarget('thunder_or_alt', event)">
-                    <img src="https://sadovnik.mobi/images/grom1.png" style="width: 18px; height: 18px; object-fit: contain;">
-                    <span style="font-size: 14px; font-weight: 500;">Гром</span>
+            <div class="settings-row" style="align-items: center;">
+                <span class="settings-label">Цель вызова</span>
+                <div style="display: flex; gap: 6px;">
+                    <div class="kb-mini-btn heli-target ${currentTarget === 'only_hawk' ? 'active' : ''}" style="width: 75px; height: 30px; display: flex; align-items: center; justify-content: center; gap: 4px;" title="Только Ястреб" onclick="window.setHeliTarget('only_hawk', event)">
+                        <img src="https://sadovnik.mobi/images/hawk1.png" style="width: 16px; height: 16px; object-fit: contain;">
+                        <span style="font-size: 12px; font-weight: 500;">Ястреб</span>
+                    </div>
+                    <div class="kb-mini-btn heli-target ${currentTarget === 'thunder_or_alt' ? 'active' : ''}" style="width: 75px; height: 30px; display: flex; align-items: center; justify-content: center; gap: 4px;" title="Гром и аналоги" onclick="window.setHeliTarget('thunder_or_alt', event)">
+                        <img src="https://sadovnik.mobi/images/grom1.png" style="width: 16px; height: 16px; object-fit: contain;">
+                        <span style="font-size: 12px; font-weight: 500;">Гром</span>
+                    </div>
                 </div>
             </div>
         `;
@@ -77,7 +76,6 @@ window.toggleModuleSettings = function(modId, event) {
     const overlay = document.getElementById(`settings-overlay-${modId}`);
     if(!card || !overlay) return;
 
-    // Собираем свежие данные и показываем шторку
     if (!card.classList.contains('show-settings')) {
         overlay.innerHTML = buildModuleSettingsHtml(modId);
         card.classList.add('show-settings');
@@ -104,7 +102,6 @@ export function initDashboard() {
         const emoji = mod.name.split(' ')[0];
         const title = mod.name.substring(mod.name.indexOf(' ') + 1);
         
-        // Очистили жестко заданные элементы управления. Только шестеренка.
         let gearBtn = '';
         if (mod.id === 'lottery' || mod.id === 'heli') {
             gearBtn = `
@@ -143,7 +140,6 @@ export function initDashboard() {
         `;
         container.appendChild(card);
 
-        // Сохраняем ссылки на элементы в кэш
         DOM[mod.id] = {
             card: card,
             timer: card.querySelector(`#timer-${mod.id}`),
