@@ -55,13 +55,13 @@ body {
 /* Сетка и Карточки */
 .modules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
 .module-card { position: relative; overflow: hidden; padding: 20px; transition: transform 0.2s ease, box-shadow 0.2s ease; display: flex; flex-direction: column; gap: 16px; }
-.module-card:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4); }
+.module-card:hover, .module-card.show-settings { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4); }
 
 .module-header { display: flex; justify-content: space-between; align-items: center; }
 .module-title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.3px; color: var(--text-main); white-space: nowrap; }
 
 .module-controls { display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transform: translateX(10px); transition: opacity 0.3s ease, transform 0.3s ease; }
-.module-card:hover .module-controls { opacity: 1; pointer-events: all; transform: translateX(0); }
+.module-card:hover .module-controls, .module-card.show-settings .module-controls { opacity: 1; pointer-events: all; transform: translateX(0); }
 @media (hover: none) { .module-controls { opacity: 1; pointer-events: all; transform: translateX(0); } }
 
 .btn-reset { color: var(--text-muted); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: 0.2s; }
@@ -140,7 +140,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 .mat-item.done .mat-bar-fill { background: var(--apple-green); }
 
 /* --- ШТОРКА НАСТРОЕК МОДУЛЯ (ОПТИМИЗИРОВАНО) --- */
-.module-settings-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(20, 20, 22, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); z-index: 10; display: flex; flex-direction: column; padding: 12px 14px; transform: translateY(100%); opacity: 0; transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease; pointer-events: none; box-sizing: border-box; }
+.module-settings-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(20, 20, 22, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); z-index: 10; display: flex; flex-direction: column; padding: 16px 20px; transform: translateY(100%); opacity: 0; transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease; pointer-events: none; box-sizing: border-box; }
 .module-card.show-settings .module-settings-overlay { transform: translateY(0); opacity: 1; pointer-events: all; }
 .settings-overlay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--glass-border); }
 .settings-overlay-title { font-weight: 600; font-size: 15px; color: var(--text-main); }
