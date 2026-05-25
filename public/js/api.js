@@ -45,6 +45,20 @@ export async function setHeliTarget(target, event) {
     fetchState();
 }
 
+// 🎟️ ДОБАВЛЕНО: Управление тумблером покупки билетов лотереи
+export async function setLotteryTickets(buyTickets, event) {
+    if (!State.accountId) return;
+
+    if (State.global) State.global.lotBuyTickets = buyTickets;
+
+    await fetch('/api/account-setting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: State.accountId, key: 'lot_buy_tickets', value: buyTickets ? 'true' : 'false' })
+    });
+    fetchState();
+}
+
 export async function toggleModule(moduleId, isEnabled) {
     if(!State.accountId) return;
     await fetch('/api/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accountId: State.accountId, moduleName: moduleId, isEnabled }) });

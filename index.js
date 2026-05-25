@@ -115,6 +115,7 @@ app.get('/api/state', (req, res) => {
         priorities: priorities,
         useWorkers: db.getAccountSettings(accId, 'use_workers') === 'true',
         lotPrio: db.getAccountSettings(accId, 'lot_prio') || 'price',
+        lotBuyTickets: db.getAccountSettings(accId, 'lot_buy_tickets') !== 'false', // 🎟️ ДОБАВЛЕНО: статус тумблера билетов
         upgrade_info: db.getAccountSettings(accId, 'upgrade_info') || '', // 🛠️ Передаем текст улучшения
         heliTarget: db.getAccountSettings(accId, 'heli_target') || 'thunder_or_alt', // 🚁 ДОБАВЛЕНО: передаем стейт вертолета
         nursery_tasks: JSON.parse(db.getAccountSettings(accId, 'nursery_active_tasks') || '{}'),

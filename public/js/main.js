@@ -1,6 +1,6 @@
 import { State } from './state.js';
-// 🚁 ИМПОРТ: Добавили setHeliTarget
-import { fetchState, toggleModule, toggleMaster, resetModule, setLotteryPrio, setHeliTarget } from './api.js';
+// 🚁 ИМПОРТ: Добавили setLotteryTickets
+import { fetchState, toggleModule, toggleMaster, resetModule, setLotteryPrio, setHeliTarget, setLotteryTickets } from './api.js';
 import { renderLoop, renderHouseCard } from './ui.js';
 import { initAccountsDropdown, changeAccountCustom, toggleAccountStatus, loadAccounts, addNewAccount, deleteAccount } from './accounts.js';
 import { switchNavView } from './settings.js';
@@ -15,8 +15,9 @@ window.toggleAccountStatus = toggleAccountStatus;
 window.addNewAccount = addNewAccount;
 window.deleteAccount = deleteAccount;
 window.switchNavView = switchNavView;
-// 🚁 ГЛОБАЛИЗАЦИЯ: Связываем функцию вертолета с окном
+// 🚁 ГЛОБАЛИЗАЦИЯ: Связываем функции с окном
 window.setHeliTarget = setHeliTarget;
+window.setLotteryTickets = setLotteryTickets;
 
 // 2. Навешиваем слушатели на статические кнопки интерфейса
 document.getElementById('account-dropdown-trigger').addEventListener('click', (e) => {
