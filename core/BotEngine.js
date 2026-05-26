@@ -139,6 +139,14 @@ class BotEngine {
         let isArenaOn = true; 
         let isTasksOn = true; // 📋 ДОБАВЛЕНО: Безусловное включение заданий
 
+        // 🔒 ВАЖНО: Текущий уровень игрока и словарь ограничений
+        let currentLevel = this.db.getProfile().level || 0;
+        const unlockLevels = {
+            farm: 0, rancho: 0, treasury: 0, cellar: 10, zagon: 10, heli: 10,
+            arena: 20, ponds: 30, nursery: 30, lottery: 35, 
+            house: 45, upgrader: 45, designer: 45, zavalinka: 45, tasks: 0
+        };
+
         let executeMap = {
             'farm': async () => { if (isFarmOn && farmTimer !== -1 && now >= farmTimer) await FarmModule.execute(this.client, this.db, this.workers); },
             'rancho': async () => { if (isRanchoOn && ranchoTimer !== -1 && now >= ranchoTimer) await RanchoModule.execute(this.client, this.db, this.workers); },
@@ -170,6 +178,11 @@ class BotEngine {
         };
 
         for (let mod of priorities) {
+            let reqLevel = unlockLevels[mod] || 0;
+
+            // 🤫 Тихая блокировка: если профиль загрузился и уровень не дотягивает - переходим к следующему модулю
+            if (currentLevel > 0 && currentLevel < reqLevel) continue;
+
             if (executeMap[mod]) {
                 try {
                     await executeMap[mod]();
