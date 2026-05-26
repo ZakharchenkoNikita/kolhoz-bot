@@ -156,19 +156,29 @@ export function initDashboard() {
 function handleLotteryUI(ui, globalState, timeInfo, percent) {
     let ticketTime = globalState.timers.lotteryTicket || 0;
     let ticketInfo = formatTime(ticketTime);
+    let buyTickets = (globalState.lotBuyTickets !== false); 
 
     if (timeInfo.isMax) {
         ui.timerText = ticketInfo.isReady ? "Билет готов!" : ticketInfo.text;
         ui.timerColor = ticketInfo.isReady ? "var(--apple-green)" : "var(--text-main)";
-        ui.statusText = "Полностью прокачана";
-        ui.statusColor = "#ffcc00"; 
+        
+        if (!buyTickets) {
+            ui.statusText = "Покупка билетов отключена";
+            ui.statusColor = "#ff453a";
+        } else {
+            ui.statusText = "Полностью прокачана";
+            ui.statusColor = "#ffcc00"; 
+        }
         
         let ticketPercent = getRingPercent('lottery', ticketTime);
         ui.progWidth = `${ticketPercent}%`;
         ui.progColor = ticketInfo.isReady ? "var(--apple-green)" : "var(--apple-blue)";
     } 
     else if (!timeInfo.isReady) {
-        if (ticketInfo.isReady) {
+        if (!buyTickets) {
+            ui.statusText = "Покупка билетов отключена";
+            ui.statusColor = "#ff453a";
+        } else if (ticketInfo.isReady) {
             ui.statusText = "Билет: Готово!";
             ui.statusColor = "var(--apple-green)";
         } else {
