@@ -238,26 +238,35 @@ class LotteryModule extends BaseModule {
 
         let balance = this.parseBalance(parsedPage);
 
-        let bought = await this.buySingleTicket(client, parsedPage, balance, username, selected.name);
-        
-        if (bought.success) {
-            let newWinnings = null;
-            if (bought.resultPage) {
-                newWinnings = this.parseWinnings(bought.resultPage, username, selected.name);
+        // 🎟️ Читаем настройку тумблера: покупать билеты или нет
+        let buyTickets = db.getAccountSettings('lot_buy_tickets') !== 'false';
+
+        if (buyTickets) {
+            let bought = await this.buySingleTicket(client, parsedPage, balance, username, selected.name);
+            
+            if (bought.success) {
+                let newWinnings = null;
+                if (bought.resultPage) {
+                    newWinnings = this.parseWinnings(bought.resultPage, username, selected.name);
+                }
+                
+                LotteryStats.updateDailyStats(db, username, bought.spent, newWinnings);
+                
+                let delayMs = Math.floor(Math.random() * 2000) + 1000;
+                db.saveTimer('kb_lot_ticket_timer', Date.now() + delayMs);
+                return; // Возвращаемся сразу после покупки, прокачку проверим на следующем тике
             }
-            
-            LotteryStats.updateDailyStats(db, username, bought.spent, newWinnings);
-            
-            let delayMs = Math.floor(Math.random() * 2000) + 1000;
-            db.saveTimer('kb_lot_ticket_timer', Date.now() + delayMs);
-            return;
+
+            let waitTicketsMs = Math.floor(Math.random() * 3600000) + 3600000; 
+            db.saveTimer('kb_lot_ticket_timer', Date.now() + waitTicketsMs);
+            console.log(`🎫 [${username}] [${selected.name}] Доступных билетов пока нет. Зайдем за ними через ${Math.floor(waitTicketsMs / 60000)} минут.`);
+        } else {
+            // Если тумблер выключен, ставим таймер билетов в "сон" на 24 часа
+            db.saveTimer('kb_lot_ticket_timer', Date.now() + 86400000);
+            console.log(`⏸️ [${username}] [${selected.name}] Покупка билетов отключена пользователем.`);
         }
 
-        let waitTicketsMs = Math.floor(Math.random() * 3600000) + 3600000; 
-        db.saveTimer('kb_lot_ticket_timer', Date.now() + waitTicketsMs);
-        console.log(`🎫 [${username}] [${selected.name}] Доступных билетов пока нет. Зайдем за ними через ${Math.floor(waitTicketsMs / 60000)} минут.`);
-
-        // 🛠️ ИЗМЕНЕНО: Запускаем умную проверку статуса прокачки
+        // 🛠️ Запускаем умную проверку статуса прокачки (работает всегда, даже если билеты отключены)
         let isMaxed = this.updateMaxLotteryStatus(parsedPage, db, username, selected.name);
         if (isMaxed) {
             db.saveTimer('kb_lot_timer', -1);
