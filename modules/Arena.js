@@ -12,7 +12,10 @@ class ArenaModule extends BaseModule {
         let profile = db.getProfile();
         let bricks = profile.materials?.brick;
         
-        if (!bricks) return;
+        if (!bricks) {
+            db.saveTimer('kb_arena_timer', Date.now() + 3600000);
+            return;
+        }
 
         if (!bricks.required) {
             console.log(`🧱 [${username}] Кирпичи не требуются. Отдыхаем.`);
@@ -36,7 +39,10 @@ class ArenaModule extends BaseModule {
 
         // 2. Идем на Арену
         let $ = await client.fetchHtml('/arena');
-        if (!$) return;
+        if (!$) {
+            db.saveTimer('kb_arena_timer', Date.now() + 60000);
+            return;
+        }
 
         let pageText = $('body').text().replace(/\s+/g, ' ').trim();
 
@@ -98,6 +104,7 @@ class ArenaModule extends BaseModule {
             if (await clickLink("Играть еще", 3500)) return;
             if (await clickLink("Выход", 3500)) return; 
             
+            db.saveTimer('kb_arena_timer', Date.now() + 30000);
             return; // Защита на случай, если кнопок нет
         }
 
