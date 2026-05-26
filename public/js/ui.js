@@ -226,6 +226,25 @@ const UI_STRATEGIES = {
 // 3. КОНВЕЙЕР: Расчет базового состояния интерфейса
 // ==========================================
 function calculateModuleUI(modId, globalState) {
+    // 🔒 Читаем требования к уровню напрямую из конфига
+    const modConfig = modulesConfig.find(m => m.id === modId);
+    const reqLevel = modConfig ? modConfig.level : 0;
+    let currentLevel = (globalState.profile && globalState.profile.level) ? globalState.profile.level : 0;
+    
+    // Блокируем интерфейс, если уровень меньше нужного
+    if (currentLevel > 0 && currentLevel < reqLevel) {
+        return {
+            isLocked: true,
+            opacity: "0.5",
+            timerText: "🔒",
+            timerColor: "var(--text-muted)",
+            statusText: `Откроется на ${reqLevel} уровне`,
+            statusColor: "#ff9f0a", 
+            progWidth: "0%",
+            progColor: "rgba(255,255,255,0.05)"
+        };
+    }
+
     const isEnabled = globalState.modules[modId];
     let targetTime = globalState.timers[modId];
     
@@ -236,6 +255,7 @@ function calculateModuleUI(modId, globalState) {
 
     if (!isEnabled || !globalState.masterActive) {
         return {
+            isLocked: false,
             opacity: "0.5",
             timerText: "ВЫКЛ", timerColor: "var(--text-main)",
             statusText: "Остановлен", statusColor: "",
@@ -247,6 +267,7 @@ function calculateModuleUI(modId, globalState) {
     const percent = targetTime === -1 ? 100 : getRingPercent(modId, targetTime);
     
     let ui = {
+        isLocked: false,
         opacity: "1",
         timerText: timeInfo.text, timerColor: "",
         statusText: "", statusColor: "",
@@ -293,6 +314,12 @@ export function renderLoop() {
             el.status.style.color = uiConfig.statusColor;
             el.prog.style.setProperty('--p', uiConfig.progWidth);
             el.prog.style.setProperty('--prog-color', uiConfig.progColor);
+
+            // 🔒 Скрываем тумблер и кнопки, если модуль заблокирован уровнем
+            const controls = el.card.querySelector('.module-controls');
+            if (controls) {
+                controls.style.display = uiConfig.isLocked ? 'none' : ''; 
+            }
         });
     }
     

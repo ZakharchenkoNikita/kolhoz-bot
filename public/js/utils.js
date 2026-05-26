@@ -24,13 +24,17 @@ export const MaterialNames = {
 };
 
 export const modulesConfig = [
-    { id: 'farm', name: '🧑‍🌾 Грядки' }, { id: 'rancho', name: '🌳 Ранчо' },
-    { id: 'zagon', name: '🐮 Загоны' }, { id: 'nursery', name: '🐾 Питомник' },
-    { id: 'ponds', name: '🐟 Пруды' }, { id: 'cellar', name: '🥫 Погреб' },
-    { id: 'treasury', name: '💎 Казна' }, { id: 'heli', name: '🚁 Вертолет' },
-    { id: 'upgrader', name: '🛠️ Улучшения' },
-    { id: 'designer', name: '🛋️ Дизайнер' },
-    { id: 'lottery', name: '🎲 Лотерея' }
+    { id: 'farm', name: '🧑‍🌾 Грядки', level: 0 }, 
+    { id: 'rancho', name: '🌳 Ранчо', level: 0 },
+    { id: 'zagon', name: '🐮 Загоны', level: 10 }, 
+    { id: 'nursery', name: '🐾 Питомник', level: 30 },
+    { id: 'ponds', name: '🐟 Пруды', level: 30 }, 
+    { id: 'cellar', name: '🥫 Погреб', level: 10 },
+    { id: 'treasury', name: '💎 Казна', level: 0 }, 
+    { id: 'heli', name: '🚁 Вертолет', level: 10 },
+    { id: 'upgrader', name: '🛠️ Улучшения', level: 45 },
+    { id: 'designer', name: '🛋️ Дизайнер', level: 45 },
+    { id: 'lottery', name: '🎲 Лотерея', level: 35 }
 ];
 
 export function formatTime(targetTimeMs) {
