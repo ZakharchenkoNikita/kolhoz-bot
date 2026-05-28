@@ -25,7 +25,11 @@ async function startParser() {
         process.exit(1);
     }
 
-    console.log(`✅ Успешный вход. Начинаем первый этап: сбор ссылок...`);
+    console.log(`✅ Успешный вход. Очищаем старую базу рецептов...`);
+    // ШАГ 1: Полностью сносим старую таблицу, чтобы начать с чистого листа
+    db.db.exec('DELETE FROM recipes_kb');
+
+    console.log(`Начинаем первый этап: сбор ссылок...`);
 
     // 1. Идем в главную тему "Рецепты по уровням"
     let $ = await client.fetchHtml('/topic/1185116');
@@ -86,19 +90,36 @@ async function startParser() {
         let htmlText = $page('.pb').html() || '';
         let plainText = $page('.pb').text().replace(/\s+/g, ' ').trim();
 
-        // ХОТФИКС: Отрезаем мусор снизу (подписи пользователей со случайными цифрами уровней)
-        let endIdxHtml = htmlText.indexOf('Проверить наличие рецепта:');
-        if (endIdxHtml !== -1) htmlText = htmlText.substring(0, endIdxHtml);
-
-        let endIdxText = plainText.indexOf('Проверить наличие рецепта:');
-        if (endIdxText !== -1) plainText = plainText.substring(0, endIdxText);
-
         try {
             let recipe = {};
 
-            // --- 1. ПАРСИМ ССЫЛКУ И ИНГРЕДИЕНТЫ ---
-            const linkMatch = htmlText.match(/@<a href="\/recipe\/(\d+)\/([\d\/]+)\/(-?\d+)">([^,]+),.*?<\/a>@/s);
-            if (!linkMatch) continue; // Пропускаем, если это не страница рецепта
+            // ШАГ 2: Находим якорь для разделения страницы на ВЕРХ (условия) и НИЗ (сам рецепт)
+            let anchorPlain = plainText.indexOf('Идеальный состав рецепта:');
+            if (anchorPlain === -1) anchorPlain = plainText.indexOf('Идеальный рецепт:');
+            
+            let anchorHtml = htmlText.indexOf('Идеальный состав рецепта:');
+            if (anchorHtml === -1) anchorHtml = htmlText.indexOf('Идеальный рецепт:');
+
+            if (anchorPlain === -1 || anchorHtml === -1) continue; // Пропускаем кривые страницы
+
+            // Разделяем текст (Хирургический разрез)
+            let topPlain = plainText.substring(0, anchorPlain);
+            let bottomPlain = plainText.substring(anchorPlain);
+
+            let topHtml = htmlText.substring(0, anchorHtml);
+            let bottomHtml = htmlText.substring(anchorHtml);
+
+            // Отрезаем мусор снизу (подписи, чужие уровни)
+            let endIdxPlain = bottomPlain.indexOf('Проверить наличие рецепта:');
+            if (endIdxPlain !== -1) bottomPlain = bottomPlain.substring(0, endIdxPlain);
+
+            let endIdxHtml = bottomHtml.indexOf('Проверить наличие рецепта:');
+            if (endIdxHtml !== -1) bottomHtml = bottomHtml.substring(0, endIdxHtml);
+
+            // --- 1. ПАРСИМ ССЫЛКУ И ИНГРЕДИЕНТЫ ИЗ НИЖНЕЙ ЧАСТИ ---
+            // Теперь скрипт физически не видит ссылки из блока "Чем открыть", так как они остались в topHtml
+            const linkMatch = bottomHtml.match(/@<a href="\/recipe\/(\d+)\/([\d\/]+)\/(-?\d+)">([^,]+),.*?<\/a>@/s);
+            if (!linkMatch) continue;
 
             recipe.id = parseInt(linkMatch[1]);
             let rawParams = linkMatch[2].split('/').filter(x => x !== ''); 
@@ -107,51 +128,44 @@ async function startParser() {
             recipe.hash = linkMatch[3]; 
             recipe.name = linkMatch[4].trim(); 
 
-            // --- 2. УРОВЕНЬ И МАСТЕРСТВО ---
-            const levelMatch = plainText.match(/ребуется (\d+) уровень/i);
+            // --- 2. УРОВЕНЬ И МАСТЕРСТВО (сверху и снизу) ---
+            const levelMatch = topPlain.match(/ребуется (\d+) уровень/i) || topPlain.match(/(\d+) уровень/i);
             recipe.req_level = levelMatch ? parseInt(levelMatch[1]) : 0;
 
-            const reqMasteryMatch = plainText.match(/треб\.?\s*(\d+)\s*к\.м/i);
+            const reqMasteryMatch = topPlain.match(/треб\.?\s*(\d+)\s*к\.м/i);
             recipe.req_mastery = reqMasteryMatch ? parseInt(reqMasteryMatch[1]) : 0;
 
-            const maxMasteryMatch = plainText.match(/(\d+)\s*к\.м\.\s*\(при идеальном/i);
+            const maxMasteryMatch = bottomPlain.match(/(\d+)\s*к\.м\.\s*\(при идеальном/i);
             recipe.max_mastery = maxMasteryMatch ? parseInt(maxMasteryMatch[1]) : 0;
 
             // --- 3. ФЛАГИ ---
-            recipe.is_author = plainText.toLowerCase().includes('авторский');
-            recipe.is_hard = plainText.includes('Сложный в открытии рецепт') || htmlText.includes('advice.png');
+            recipe.is_author = topPlain.toLowerCase().includes('авторский');
+            recipe.is_hard = topPlain.includes('Сложный в открытии рецепт') || topHtml.includes('advice.png');
 
             // --- 4. ЦЕНА ---
-            const priceMatch = plainText.match(/Цена в магазине:.*?(\d[\d\s\']*)\s*\(/i);
+            const priceMatch = topPlain.match(/Цена в магазине:.*?(\d[\d\s\']*)\s*\(/i);
             recipe.price = priceMatch ? parseInt(priceMatch[1].replace(/[\s\']/g, '')) : 0;
 
-            // --- 5. УСЛОВИЯ ОТКРЫТИЯ ---
+            // --- 5. УСЛОВИЯ ОТКРЫТИЯ (строго из ВЕРХНЕЙ части!) ---
             recipe.unlock_conditions = {};
             
-            let unlockStart = plainText.indexOf('Чем открыть:');
-            let unlockEnd = plainText.indexOf('Идеальный состав рецепта:');
-            if (unlockEnd === -1) unlockEnd = plainText.indexOf('Идеальный рецепт:'); // Учитываем разное написание
-
-            let unlockStartHtml = htmlText.indexOf('Чем открыть:');
-            let unlockEndHtml = htmlText.indexOf('Идеальный состав рецепта:');
-            if (unlockEndHtml === -1) unlockEndHtml = htmlText.indexOf('Идеальный рецепт:');
-            
-            if (unlockStart !== -1 && unlockEnd !== -1 && unlockStartHtml !== -1 && unlockEndHtml !== -1) {
-                let unlockStrPlain = plainText.substring(unlockStart, unlockEnd);
-                let unlockStrHtml = htmlText.substring(unlockStartHtml, unlockEndHtml);
-
-                // А) Открытие специей
-                if (unlockStrPlain.includes('Покупкой специй:')) {
-                    const spiceMatch = unlockStrPlain.match(/Покупкой специй:.*?неизвестно\)\s*([А-Яа-яЁё\-\s]+?)\s*Купить специи/i);
+            let unlockStartPlain = topPlain.indexOf('Чем открыть:');
+            if (unlockStartPlain !== -1) {
+                let unlockBlockPlain = topPlain.substring(unlockStartPlain);
+                if (unlockBlockPlain.includes('Покупкой специй:')) {
+                    const spiceMatch = unlockBlockPlain.match(/Покупкой специй:.*?неизвестно\)\s*([А-Яа-яЁё\-\s]+?)\s*Купить специи/i);
                     if (spiceMatch && !spiceMatch[1].includes('Не найдено')) {
                         recipe.unlock_conditions.by_spice = spiceMatch[1].trim();
                     }
                 }
+            }
 
-                // Б) Открытие варкой (Закаткой)
-                if (unlockStrHtml.includes('Закаткой:')) {
+            let unlockStartHtml = topHtml.indexOf('Чем открыть:');
+            if (unlockStartHtml !== -1) {
+                let unlockBlockHtml = topHtml.substring(unlockStartHtml);
+                if (unlockBlockHtml.includes('Закаткой:')) {
                     let reqRecipes = [];
-                    const cookMatches = [...unlockStrHtml.matchAll(/@<a href="\/recipe\/[^"]+">([^,]+),.*?<\/a>@/g)];
+                    const cookMatches = [...unlockBlockHtml.matchAll(/@<a href="\/recipe\/[^"]+">([^,]+),.*?<\/a>@/g)];
                     for (let m of cookMatches) {
                         reqRecipes.push(m[1].trim());
                     }
@@ -164,17 +178,16 @@ async function startParser() {
             db.saveRecipe(recipe);
             totalSaved++;
             
-            // Выводим красивый прогресс в консоль
             process.stdout.write(`\r💾 Прогресс: [${index + 1}/${recipeLinks.length}] Сохранен: ${recipe.name}`.padEnd(80));
 
         } catch (e) {
             console.log(`\n[!] Ошибка при парсинге рецепта: ${link} - ${e.message}`);
         }
 
-        await new Promise(r => setTimeout(r, 1500)); // Жесткая пауза
+        await new Promise(r => setTimeout(r, 1500)); 
     }
 
-    console.log(`\n\n🎉 Парсинг успешно завершен! Собрано рецептов в Базу Знаний: ${totalSaved}`);
+    console.log(`\n\n🎉 Парсинг успешно завершен! Собрано уникальных рецептов: ${totalSaved}`);
     process.exit(0);
 }
 
