@@ -115,6 +115,22 @@ class DBManager {
             lotteries TEXT
         )`);
 
+        // Таблица для хранения Базы Знаний рецептов Погреба
+        this.db.exec(`CREATE TABLE IF NOT EXISTS recipes_kb (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            req_level INTEGER DEFAULT 0,
+            req_mastery INTEGER DEFAULT 0,
+            is_author INTEGER DEFAULT 0,
+            is_hard INTEGER DEFAULT 0,
+            price INTEGER DEFAULT 0,
+            ingredients TEXT,
+            time_min INTEGER DEFAULT 0,
+            hash TEXT,
+            max_mastery INTEGER DEFAULT 0,
+            unlock_conditions TEXT
+        )`);
+
         // Передаем эстафету в пост-инициализацию
         this._postInitSetup();
     }
@@ -164,6 +180,15 @@ class DBManager {
         
         this.stmts.getRiddles = this.db.prepare('SELECT question, answer FROM riddles');
         this.stmts.getSkips = this.db.prepare('SELECT img_name, trigger_text, action_text FROM skips');
+
+        // Подготовленные запросы для рецептов
+        this.stmts.saveRecipe = this.db.prepare(`
+            INSERT OR REPLACE INTO recipes_kb 
+            (id, name, req_level, req_mastery, is_author, is_hard, price, ingredients, time_min, hash, max_mastery, unlock_conditions) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        this.stmts.getRecipe = this.db.prepare('SELECT * FROM recipes_kb WHERE id = ?');
+        this.stmts.getAllRecipes = this.db.prepare('SELECT * FROM recipes_kb');
     }
 
     seedZavalinka() {
@@ -322,6 +347,51 @@ class DBManager {
             }
         }
         return null;
+    }
+
+    // ==========================================
+    // 7. БАЗА ЗНАНИЙ РЕЦЕПТОВ (ПОГРЕБ)
+    // ==========================================
+    saveRecipe(recipe) {
+        let ingStr = this._stringifyJson(recipe.ingredients);
+        let unlockStr = this._stringifyJson(recipe.unlock_conditions);
+        
+        this.stmts.saveRecipe.run(
+            recipe.id, 
+            recipe.name, 
+            recipe.req_level || 0, 
+            recipe.req_mastery || 0,
+            recipe.is_author ? 1 : 0, 
+            recipe.is_hard ? 1 : 0, 
+            recipe.price || 0,
+            ingStr, 
+            recipe.time_min || 0, 
+            recipe.hash, 
+            recipe.max_mastery || 0, 
+            unlockStr
+        );
+    }
+
+    getRecipe(id) {
+        const row = this.stmts.getRecipe.get(id);
+        if (row) {
+            row.ingredients = this._parseJson(row.ingredients);
+            row.unlock_conditions = this._parseJson(row.unlock_conditions);
+            row.is_author = row.is_author === 1;
+            row.is_hard = row.is_hard === 1;
+        }
+        return row;
+    }
+
+    getAllRecipes() {
+        const rows = this.stmts.getAllRecipes.all();
+        return rows.map(row => {
+            row.ingredients = this._parseJson(row.ingredients);
+            row.unlock_conditions = this._parseJson(row.unlock_conditions);
+            row.is_author = row.is_author === 1;
+            row.is_hard = row.is_hard === 1;
+            return row;
+        });
     }
 }
 
