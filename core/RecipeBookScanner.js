@@ -39,12 +39,14 @@ class RecipeBookScanner {
             let nextLink = null;
             $('a.pag').each((i, el) => {
                 let text = $(el).text().trim();
-                if (text === 'туда>') {
+                // Хотфикс: ищем вхождение слова "туда", игнорируя спецсимволы вроде &gt;
+                if (text.includes('туда')) {
                     nextLink = $(el).attr('href');
                 }
             });
 
             if (nextLink) {
+                console.log(`➡️ [${this.username}] Найдена следующая страница, переходим...`);
                 // Приводим относительную ссылку вида ./recipebook?... к нормальному /recipebook?...
                 currentUrl = nextLink.replace(/^\.\//, '/');
                 if (!currentUrl.startsWith('/')) {
