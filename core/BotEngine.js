@@ -4,6 +4,7 @@ const ProfileScanner = require('./ProfileScanner');
 
 const HouseScanner = require('./house/HouseScanner');
 const StoreroomScanner = require('./house/StoreroomScanner');
+const RecipeBookScanner = require('./RecipeBookScanner'); // 📖 ДОБАВЛЕНО: Импорт сканера рецептов
 
 const FarmModule = require('../modules/Farm');
 const LotteryModule = require('../modules/lottery/Lottery');
@@ -50,6 +51,9 @@ class BotEngine {
         this.houseScanner = new HouseScanner(this.client, this.db, this.username); 
         this.storeScanner = new StoreroomScanner(this.client, this.db, this.username); 
 
+        // 📖 ДОБАВЛЕНО: Инициализация сканера книги рецептов
+        this.recipeScanner = new RecipeBookScanner(this.client, globalDb, this.username); 
+
         this.isRunning = false;
     }
 
@@ -69,6 +73,13 @@ class BotEngine {
         await this.scanner.scan();
         await this.houseScanner.scan();
         await this.storeScanner.scan();
+
+        // 📖 ДОБАВЛЕНО: Холодный старт Книги Рецептов
+        let profile = this.db.getProfile();
+        if (profile.level >= 10 && (!profile.recipe_book || Object.keys(profile.recipe_book).length === 0)) {
+            await this.recipeScanner.scan();
+            this.db.saveTimer('kb_rb_timer', Date.now() + 43200000); // Заводим таймер на 12 часов
+        }
 
         setInterval(() => {
             if(this.isRunning) {
@@ -122,6 +133,7 @@ class BotEngine {
         let designerTimer = this.db.getTimer('kb_design_timer') ?? 0; 
         let upgradeTimer = this.db.getTimer('kb_upgrade_timer') ?? 0; 
         let tasksTimer = this.db.getTimer('kb_tasks_timer') ?? 0; // 📋 ДОБАВЛЕНО: Чтение таймера заданий
+        let rbTimer = this.db.getTimer('kb_rb_timer') ?? 0; // 📖 ДОБАВЛЕНО: Чтение таймера Книги Рецептов
 
         let isFarmOn = this.db.getTimer('mod_farm') !== 0;
         let isRanchoOn = this.db.getTimer('mod_rancho') !== 0;
@@ -146,6 +158,12 @@ class BotEngine {
             arena: 20, ponds: 30, nursery: 30, lottery: 35, 
             house: 45, upgrader: 45, designer: 45, zavalinka: 45, tasks: 0
         };
+
+        // 📖 ДОБАВЛЕНО: Резервное фоновое сканирование Книги Рецептов (1 раз в 12 часов)
+        if (currentLevel >= 10 && rbTimer !== -1 && now >= rbTimer) {
+            await this.recipeScanner.scan();
+            this.db.saveTimer('kb_rb_timer', now + 43200000); // Обновляем таймер на 12 часов
+        }
 
         let executeMap = {
             'farm': async () => { if (isFarmOn && farmTimer !== -1 && now >= farmTimer) await FarmModule.execute(this.client, this.db, this.workers); },

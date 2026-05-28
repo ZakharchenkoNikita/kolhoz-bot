@@ -11,7 +11,7 @@ const DEFAULT_PROFILE = {
     nickname: 'Неизвестно', level: 0, game_id: '?', xp_day: '-', 
     max_lottery: 0, coins: 0, rubies: 0, xp_total: 0, xp_today: 0, 
     xp_start_day: 0, last_xp_update: 0, materials: {}, interior: {}, 
-    storeroom: {}, is_building: 0
+    storeroom: {}, recipe_book: {}, is_building: 0
 };
 
 class DBManager {
@@ -81,6 +81,7 @@ class DBManager {
             materials TEXT,
             interior TEXT,
             storeroom TEXT, 
+            recipe_book TEXT,
             is_building INTEGER DEFAULT 0,
             FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
         )`);
@@ -88,6 +89,7 @@ class DBManager {
         // Умные миграции колонок (без костыльных try/catch)
         this._ensureColumnExists('profile', 'interior', 'TEXT DEFAULT "{}"');
         this._ensureColumnExists('profile', 'storeroom', 'TEXT DEFAULT "{}"');
+        this._ensureColumnExists('profile', 'recipe_book', 'TEXT DEFAULT "{}"');
         this._ensureColumnExists('profile', 'is_building', 'INTEGER DEFAULT 0');
 
         this.db.exec(`CREATE TABLE IF NOT EXISTS riddles (
@@ -174,8 +176,8 @@ class DBManager {
         this.stmts.getProfile = this.db.prepare('SELECT * FROM profile WHERE account_id = ?');
         this.stmts.saveProfile = this.db.prepare(`
             INSERT OR REPLACE INTO profile 
-            (account_id, nickname, level, game_id, xp_day, max_lottery, coins, rubies, xp_total, xp_today, xp_start_day, last_xp_update, materials, interior, storeroom, is_building) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (account_id, nickname, level, game_id, xp_day, max_lottery, coins, rubies, xp_total, xp_today, xp_start_day, last_xp_update, materials, interior, storeroom, recipe_book, is_building) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         this.stmts.getRiddles = this.db.prepare('SELECT question, answer FROM riddles');
@@ -304,6 +306,7 @@ class DBManager {
             row.materials = this._parseJson(row.materials);
             row.interior = this._parseJson(row.interior);
             row.storeroom = this._parseJson(row.storeroom);
+            row.recipe_book = this._parseJson(row.recipe_book);
             return row;
         }
         return { ...DEFAULT_PROFILE }; 
@@ -316,11 +319,12 @@ class DBManager {
         let matStr = this._stringifyJson(merged.materials);
         let intStr = this._stringifyJson(merged.interior);
         let storeStr = this._stringifyJson(merged.storeroom);
+        let recipeBookStr = this._stringifyJson(merged.recipe_book);
         
         this.stmts.saveProfile.run(
             accountId, merged.nickname, merged.level, merged.game_id, merged.xp_day, 
             merged.max_lottery, merged.coins, merged.rubies, merged.xp_total, merged.xp_today, 
-            merged.xp_start_day, merged.last_xp_update, matStr, intStr, storeStr,
+            merged.xp_start_day, merged.last_xp_update, matStr, intStr, storeStr, recipeBookStr,
             merged.is_building ? 1 : 0 
         );
     }
