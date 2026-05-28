@@ -86,6 +86,13 @@ async function startParser() {
         let htmlText = $page('.pb').html() || '';
         let plainText = $page('.pb').text().replace(/\s+/g, ' ').trim();
 
+        // ХОТФИКС: Отрезаем мусор снизу (подписи пользователей со случайными цифрами уровней)
+        let endIdxHtml = htmlText.indexOf('Проверить наличие рецепта:');
+        if (endIdxHtml !== -1) htmlText = htmlText.substring(0, endIdxHtml);
+
+        let endIdxText = plainText.indexOf('Проверить наличие рецепта:');
+        if (endIdxText !== -1) plainText = plainText.substring(0, endIdxText);
+
         try {
             let recipe = {};
 
@@ -120,12 +127,18 @@ async function startParser() {
 
             // --- 5. УСЛОВИЯ ОТКРЫТИЯ ---
             recipe.unlock_conditions = {};
-            let unlockBlockMatch = plainText.match(/Чем открыть:(.*?)Идеальный/is);
-            let unlockBlockHtmlMatch = htmlText.match(/Чем открыть:(.*?)Идеальный/is);
             
-            if (unlockBlockMatch && unlockBlockHtmlMatch) {
-                let unlockStrPlain = unlockBlockMatch[1];
-                let unlockStrHtml = unlockBlockHtmlMatch[1];
+            let unlockStart = plainText.indexOf('Чем открыть:');
+            let unlockEnd = plainText.indexOf('Идеальный состав рецепта:');
+            if (unlockEnd === -1) unlockEnd = plainText.indexOf('Идеальный рецепт:'); // Учитываем разное написание
+
+            let unlockStartHtml = htmlText.indexOf('Чем открыть:');
+            let unlockEndHtml = htmlText.indexOf('Идеальный состав рецепта:');
+            if (unlockEndHtml === -1) unlockEndHtml = htmlText.indexOf('Идеальный рецепт:');
+            
+            if (unlockStart !== -1 && unlockEnd !== -1 && unlockStartHtml !== -1 && unlockEndHtml !== -1) {
+                let unlockStrPlain = plainText.substring(unlockStart, unlockEnd);
+                let unlockStrHtml = htmlText.substring(unlockStartHtml, unlockEndHtml);
 
                 // А) Открытие специей
                 if (unlockStrPlain.includes('Покупкой специй:')) {
