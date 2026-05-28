@@ -31,14 +31,25 @@ async function startParser() {
     let $ = await client.fetchHtml('/topic/1185116');
     if (!$) return console.error('❌ Не удалось загрузить главную тему форума.');
 
-    // Собираем ссылки на диапазоны уровней
+    // Собираем ссылки на диапазоны уровней (ищем текст вида "10-21")
     let categoryLinks = [];
     $('a').each((i, el) => {
         let href = $(el).attr('href');
-        if (href && href.includes('/topic/') && !href.includes('1185116') && $(el).closest('span').text().includes('сюда')) {
+        let text = $(el).text().trim();
+        if (href && href.includes('/topic/') && text.match(/^\d+-\d+$/)) {
             if (!categoryLinks.includes(href)) categoryLinks.push(href);
         }
     });
+
+    // Пуленепробиваемый резерв: если регулярка не сработала, используем жестко заданные ссылки
+    if (categoryLinks.length === 0) {
+        console.log('⚠️ Используем резервный алгоритм поиска категорий...');
+        categoryLinks = [
+            '/topic/524596', '/topic/525072', '/topic/525073', '/topic/525074',
+            '/topic/525075', '/topic/525076', '/topic/525077', '/topic/874470',
+            '/topic/1030605', '/topic/1071985', '/topic/1071986', '/topic/1135639'
+        ];
+    }
 
     console.log(`📂 Найдено категорий уровней: ${categoryLinks.length}`);
 
@@ -60,7 +71,9 @@ async function startParser() {
     }
 
     console.log(`\n🎯 Найдено рецептов для анализа: ${recipeLinks.length}`);
-    console.log(`⏳ Начинаем второй этап: глубокий парсинг. Это займет около 10 минут...\n`);
+    if (recipeLinks.length === 0) return console.log("❌ Парсинг остановлен, так как рецепты не найдены.");
+    
+    console.log(`⏳ Начинаем второй этап: глубокий парсинг. Это займет около 10-15 минут...\n`);
 
     let totalSaved = 0;
 
@@ -73,14 +86,12 @@ async function startParser() {
         let htmlText = $page('.pb').html() || '';
         let plainText = $page('.pb').text().replace(/\s+/g, ' ').trim();
 
-        if (!htmlText.includes('Идеальный состав рецепта:')) continue;
-
         try {
             let recipe = {};
 
             // --- 1. ПАРСИМ ССЫЛКУ И ИНГРЕДИЕНТЫ ---
-            const linkMatch = htmlText.match(/Идеальный.*?@<a href="\/recipe\/(\d+)\/([\d\/]+)\/(-?\d+)">([^,]+),.*?<\/a>@/s);
-            if (!linkMatch) continue;
+            const linkMatch = htmlText.match(/@<a href="\/recipe\/(\d+)\/([\d\/]+)\/(-?\d+)">([^,]+),.*?<\/a>@/s);
+            if (!linkMatch) continue; // Пропускаем, если это не страница рецепта
 
             recipe.id = parseInt(linkMatch[1]);
             let rawParams = linkMatch[2].split('/').filter(x => x !== ''); 
@@ -90,45 +101,50 @@ async function startParser() {
             recipe.name = linkMatch[4].trim(); 
 
             // --- 2. УРОВЕНЬ И МАСТЕРСТВО ---
-            const levelMatch = plainText.match(/Требуется (\d+) уровень/i);
+            const levelMatch = plainText.match(/ребуется (\d+) уровень/i);
             recipe.req_level = levelMatch ? parseInt(levelMatch[1]) : 0;
 
             const reqMasteryMatch = plainText.match(/треб\.?\s*(\d+)\s*к\.м/i);
             recipe.req_mastery = reqMasteryMatch ? parseInt(reqMasteryMatch[1]) : 0;
 
-            const maxMasteryMatch = plainText.match(/(\d+)\s*к\.м\.\s*\(при идеальном составе/i);
+            const maxMasteryMatch = plainText.match(/(\d+)\s*к\.м\.\s*\(при идеальном/i);
             recipe.max_mastery = maxMasteryMatch ? parseInt(maxMasteryMatch[1]) : 0;
 
             // --- 3. ФЛАГИ ---
             recipe.is_author = plainText.toLowerCase().includes('авторский');
             recipe.is_hard = plainText.includes('Сложный в открытии рецепт') || htmlText.includes('advice.png');
 
-            // --- 4. ЦЕНА (обрабатываем пробелы и апострофы в числах, например 1 000 или 1'000) ---
+            // --- 4. ЦЕНА ---
             const priceMatch = plainText.match(/Цена в магазине:.*?(\d[\d\s\']*)\s*\(/i);
             recipe.price = priceMatch ? parseInt(priceMatch[1].replace(/[\s\']/g, '')) : 0;
 
             // --- 5. УСЛОВИЯ ОТКРЫТИЯ ---
             recipe.unlock_conditions = {};
-            let unlockStrHtml = htmlText.substring(htmlText.indexOf('Чем открыть:'), htmlText.indexOf('Идеальный состав рецепта:'));
-            let unlockStrPlain = plainText.substring(plainText.indexOf('Чем открыть:'), plainText.indexOf('Идеальный состав рецепта:'));
+            let unlockBlockMatch = plainText.match(/Чем открыть:(.*?)Идеальный/is);
+            let unlockBlockHtmlMatch = htmlText.match(/Чем открыть:(.*?)Идеальный/is);
+            
+            if (unlockBlockMatch && unlockBlockHtmlMatch) {
+                let unlockStrPlain = unlockBlockMatch[1];
+                let unlockStrHtml = unlockBlockHtmlMatch[1];
 
-            // А) Открытие специей
-            if (unlockStrPlain.includes('Покупкой специй:')) {
-                const spiceMatch = unlockStrPlain.match(/Покупкой специй:.*?неизвестно\)\s*([А-Яа-яЁё\-\s]+?)\s*Купить специи/i);
-                if (spiceMatch && !spiceMatch[1].includes('Не найдено')) {
-                    recipe.unlock_conditions.by_spice = spiceMatch[1].trim();
+                // А) Открытие специей
+                if (unlockStrPlain.includes('Покупкой специй:')) {
+                    const spiceMatch = unlockStrPlain.match(/Покупкой специй:.*?неизвестно\)\s*([А-Яа-яЁё\-\s]+?)\s*Купить специи/i);
+                    if (spiceMatch && !spiceMatch[1].includes('Не найдено')) {
+                        recipe.unlock_conditions.by_spice = spiceMatch[1].trim();
+                    }
                 }
-            }
 
-            // Б) Открытие варкой (Закаткой)
-            if (unlockStrHtml.includes('Закаткой:')) {
-                let reqRecipes = [];
-                const cookMatches = [...unlockStrHtml.matchAll(/@<a href="\/recipe\/[^"]+">([^,]+),.*?<\/a>@/g)];
-                for (let m of cookMatches) {
-                    reqRecipes.push(m[1].trim());
-                }
-                if (reqRecipes.length > 0) {
-                    recipe.unlock_conditions.by_cooking = reqRecipes;
+                // Б) Открытие варкой (Закаткой)
+                if (unlockStrHtml.includes('Закаткой:')) {
+                    let reqRecipes = [];
+                    const cookMatches = [...unlockStrHtml.matchAll(/@<a href="\/recipe\/[^"]+">([^,]+),.*?<\/a>@/g)];
+                    for (let m of cookMatches) {
+                        reqRecipes.push(m[1].trim());
+                    }
+                    if (reqRecipes.length > 0) {
+                        recipe.unlock_conditions.by_cooking = reqRecipes;
+                    }
                 }
             }
 
