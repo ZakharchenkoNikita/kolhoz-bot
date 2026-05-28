@@ -76,7 +76,9 @@ class BotEngine {
 
         // 📖 ДОБАВЛЕНО: Холодный старт Книги Рецептов
         let profile = this.db.getProfile();
-        if (profile.level >= 10 && (!profile.recipe_book || Object.keys(profile.recipe_book).length === 0)) {
+        
+        // 🛠️ ВРЕМЕННЫЙ ХАК: убрали проверку (!profile.recipe_book), чтобы принудительно просканировать книгу при запуске!
+        if (profile.level >= 10) {
             await this.recipeScanner.scan();
             this.db.saveTimer('kb_rb_timer', Date.now() + 43200000); // Заводим таймер на 12 часов
         }
