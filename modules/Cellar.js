@@ -67,9 +67,9 @@ class CellarModule extends BaseModule {
     // 🧠 ФАЗА ВЫБОРА ЦЕЛИ И СВЕРКА С БАЗОЙ
     // ==========================================
     
-    // Очищаем названия от приписки (авторский) для идеального совпадения
+    // Очищаем названия: отрезаем все, что идет в скобках, и убираем пробелы
     static cleanName(name) {
-        return name.toLowerCase().replace(/\(авторский\)/gi, '').trim();
+        return name.toLowerCase().split('(')[0].trim();
     }
 
     // Получаем реальный прогресс, учитывая NaN/null как Идеальный (MAX)
@@ -82,7 +82,7 @@ class CellarModule extends BaseModule {
                 return parseInt(val, 10);
             }
         }
-        return undefined;
+        return 0; // ИЗМЕНЕНИЕ: Если рецепта нет в книге, мастерство = 0
     }
 
     static chooseTarget(db, currentLevel, cookingNow = []) {
@@ -98,13 +98,12 @@ class CellarModule extends BaseModule {
             if (r.req_level > currentLevel) return false; 
             
             let currentM = this.getRecipeMastery(r.name, recipeBook);
-            if (currentM === undefined) return false; // Скрыт или еще не открыт
             if (currentM === 'MAX') return false; // Идеальный рецепт
             if (currentM >= r.max_mastery) return false; // Достиг лимита
             
-            // 🚫 Проверка на дубликаты: сверяем с объектами в памяти (name + таймер)
+            // 🚫 Проверка на дубликаты: строгое точное совпадение 1 в 1
             let cleanRName = this.cleanName(r.name);
-            let isCooking = cookingNow.some(cn => cn.name && (cn.name.includes(cleanRName) || cleanRName.includes(cn.name)));
+            let isCooking = cookingNow.some(cn => cn.name && cn.name === cleanRName);
             if (isCooking) return false;
             
             return true;
@@ -137,11 +136,8 @@ class CellarModule extends BaseModule {
             let actionUrl = this.getAbsoluteUrl(sellLink.href, currentUrl);
             let $result = await client.fetchHtml(actionUrl);
             
-            // Если продажа прошла успешно - ВСЕГДА сканируем Книгу рецептов
             if ($result) {
-                console.log(`🆙 Погреб: Урожай собран! Выполняем синхронизацию Книги Рецептов...`);
-                let scanner = new RecipeBookScanner(client, db.db, workers.username);
-                await scanner.scan();
+                console.log(`🆙 Погреб: Урожай собран!`);
             }
             db.saveTimer('kb_cel_timer', Date.now() + 3000);
             return true;
@@ -221,7 +217,7 @@ class CellarModule extends BaseModule {
                             }
                             
                             let cleanRName = this.cleanName(target.name);
-                            // Проверяем, нет ли его уже в списке (по name)
+                            // Проверяем строгое совпадение 1 в 1
                             if (!cookingNow.some(item => item.name === cleanRName)) {
                                 let targetTimeMin = target.time_min || 60; 
                                 let finishTimeMs = Date.now() + (targetTimeMin * 60000) + 15000; 
@@ -246,14 +242,6 @@ class CellarModule extends BaseModule {
     // ==========================================
     static async execute(client, db, workers) {
         try {
-            // --- ПРИНУДИТЕЛЬНАЯ ОЧИСТКА ПАМЯТИ (ОДИН РАЗ ЗА ЗАПУСК) ---
-            if (!this.isMemoryCleared) {
-                db.saveAccountSettings('kb_cel_cooking', '[]');
-                console.log('💣 Погреб: Фантомная память принудительно стерта кодом!');
-                this.isMemoryCleared = true;
-            }
-            // ----------------------------------------------------------
-
             // КОНТРОЛЬНЫЙ СКАН ПРИ ПЕРВОМ ЗАПУСКЕ БОТА
             if (!this.isInitialScanDone) {
                 console.log('🔍 Погреб: Первый запуск! Делаем контрольную синхронизацию Книги Рецептов...');
@@ -331,6 +319,11 @@ class CellarModule extends BaseModule {
                         let fillLink = allLinks.find(l => l.href.includes('putAllLink') || l.text.includes('заготовить всё') || l.text.includes('выбрать'));
                         
                         if (fillLink) {
+                            // 🔍 СКАНИРОВАНИЕ КНИГИ ПЕРЕД ВЫБОРОМ ЦЕЛИ
+                            console.log(`🔍 Погреб: Вижу пустую полку! Сканирую Книгу Рецептов перед выбором цели...`);
+                            let scanner = new RecipeBookScanner(client, db.db, workers.username);
+                            await scanner.scan();
+
                             let currentLevel = db.getProfile().level || 0;
                             let target = this.chooseTarget(db, currentLevel, cookingNow); // 🧠 Передаем занятые полки
                             

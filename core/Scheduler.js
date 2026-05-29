@@ -45,8 +45,10 @@ class Scheduler {
         accounts.forEach(acc => {
             if (acc.is_active) {
                 // Ставим 0, чтобы боты прямо сейчас сходили на Арену/Завалинку и проверили свои лимиты
-                this.db.saveTimer(acc.id, 'kb_zav_timer', 0);
+                this.db.saveTimer(acc.id, 'kb_zav_timer', 0); 
                 this.db.saveTimer(acc.id, 'kb_arena_timer', 0);
+
+                this.db.saveTimer(acc.id, 'kb_rb_timer', 0);
                 count++;
             }
         });
