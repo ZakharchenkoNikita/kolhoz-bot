@@ -111,7 +111,7 @@ class CellarModule extends BaseModule {
         });
 
         if (candidates.length === 0) {
-            console.log('⏳ Погреб: Все рецепты прокачаны или заняты! Ждем освобождения полок...');
+            console.log('⏳ Погреб: Все доступные рецепты прокачаны или заняты!');
             return { mode: 'WAIT' };
         }
 
@@ -221,6 +221,7 @@ class CellarModule extends BaseModule {
                             }
                             
                             let cleanRName = this.cleanName(target.name);
+                            // Проверяем, нет ли его уже в списке (по name)
                             if (!cookingNow.some(item => item.name === cleanRName)) {
                                 let targetTimeMin = target.time_min || 60; 
                                 let finishTimeMs = Date.now() + (targetTimeMin * 60000) + 15000; 
@@ -333,11 +334,7 @@ class CellarModule extends BaseModule {
                                 let recipe$ = await client.fetchHtml(actionUrl);
                                 if (recipe$) await this.cook(client, db, recipe$, actionUrl, target);
                                 
-                                // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ
-                                await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-                                
-                                db.saveTimer('kb_cel_timer', Date.now() + 3000);
-                                return;
+                                // После успешной посадки 1 банки не возвращаем, продолжаем цикл (если есть еще пустые полки)
                             }
                         }
                     }
