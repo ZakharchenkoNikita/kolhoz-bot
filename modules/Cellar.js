@@ -71,53 +71,92 @@ class CellarModule extends BaseModule {
         return name.toLowerCase().split('(')[0].trim();
     }
 
-    static getRecipeMastery(dbName, recipeBook) {
-        let cleanDb = this.cleanName(dbName);
-        for (let key in recipeBook) {
-            if (this.cleanName(key) === cleanDb) {
-                let val = recipeBook[key];
-                if (val === null || Number.isNaN(val) || val === 'NaN') return 'MAX';
-                return parseInt(val, 10);
-            }
-        }
-        return 0; 
-    }
-
     static chooseTarget(db, currentLevel, cookingNow = []) {
         let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
         if (!isSkillOn) return { mode: 'FARM' }; 
 
         let profile = db.getProfile();
         let recipeBook = profile.recipe_book || {};
-        let allRecipes = db.db.getAllRecipes(); 
+        
+        // --- РАСПАКОВКА КНИГИ РЕЦЕПТОВ ИЗ СТРОКИ ---
+        if (typeof recipeBook === 'string') {
+            try {
+                recipeBook = JSON.parse(recipeBook);
+            } catch (e) {
+                console.error("🚨 Ошибка распаковки Книги Рецептов:", e);
+                recipeBook = {};
+            }
+        }
 
-        let candidates = allRecipes.filter(r => {
-            if (r.req_level > currentLevel) return false; 
+        // ШАГ 1: ФОРМИРУЕМ "БЕЛЫЙ СПИСОК" (Из личной Книги Рецептов)
+        let myWhiteList = [];
+        let checkValue = (val) => {
+            if (val === 'MAX' || (typeof val === 'string' && val.toLowerCase().includes('идеал'))) return 'MAX';
+            let parsed = parseInt(val, 10);
+            return Number.isNaN(parsed) ? 0 : parsed;
+        };
+
+        if (Array.isArray(recipeBook)) {
+            for (let item of recipeBook) {
+                if (item && item.name) {
+                    let val = item.mastery !== undefined ? item.mastery : (item.value !== undefined ? item.value : item.progress);
+                    myWhiteList.push({ name: this.cleanName(item.name), mastery: checkValue(val) });
+                } else if (Array.isArray(item) && item.length >= 2) {
+                    myWhiteList.push({ name: this.cleanName(item[0]), mastery: checkValue(item[1]) });
+                } else if (item && typeof item === 'object') {
+                    for (let key in item) {
+                        myWhiteList.push({ name: this.cleanName(key), mastery: checkValue(item[key]) });
+                    }
+                }
+            }
+        } else if (typeof recipeBook === 'object' && recipeBook !== null) {
+            for (let key in recipeBook) {
+                myWhiteList.push({ name: this.cleanName(key), mastery: checkValue(recipeBook[key]) });
+            }
+        }
+
+        // ШАГ 2: ИЩЕМ РЕЦЕПТЫ В ГЛОБАЛЬНОЙ БАЗЕ И ФИЛЬТРУЕМ
+        let allRecipes = db.db.getAllRecipes(); 
+        let candidates = [];
+
+        for (let myRecipe of myWhiteList) {
+            // Проверка на Идеал
+            if (myRecipe.mastery === 'MAX') continue;
+
+            // Проверка дубликатов на полках
+            let isCooking = cookingNow.some(cn => cn.name && cn.name === myRecipe.name);
+            if (isCooking) continue;
+
+            // Обогащение из глобальной базы
+            let globalData = allRecipes.find(r => this.cleanName(r.name) === myRecipe.name);
+            if (!globalData) continue; // Если глобальная база не знает рецепт — пропускаем
+
+            // Проверка уровня персонажа
+            if (globalData.req_level > currentLevel) continue;
             
-            let currentM = this.getRecipeMastery(r.name, recipeBook);
-            if (currentM === 'MAX') return false; 
-            if (currentM >= r.max_mastery) return false; 
-            
-            let cleanRName = this.cleanName(r.name);
-            let isCooking = cookingNow.some(cn => cn.name && cn.name === cleanRName);
-            if (isCooking) return false;
-            
-            return true;
-        });
+            // Проверка лимита мастерства для текущего уровня
+            if (myRecipe.mastery >= globalData.max_mastery) continue;
+
+            // Рецепт прошел все фильтры, добавляем в список кандидатов!
+            candidates.push({
+                ...globalData,
+                current_mastery: myRecipe.mastery
+            });
+        }
 
         if (candidates.length === 0) {
             console.log('⏳ Погреб: Все доступные рецепты прокачаны или заняты!');
             return { mode: 'WAIT' };
         }
 
+        // ШАГ 3: СОРТИРОВКА (От самых высокоуровневых к простым)
         candidates.sort((a, b) => b.req_level - a.req_level);
         let target = candidates[0];
 
         let ings = Array.isArray(target.ingredients) ? target.ingredients.join('/') : target.ingredients;
         let url = `/recipe/${target.id}/${ings}/${target.time_min}/${target.hash}`;
         
-        let currentM = this.getRecipeMastery(target.name, recipeBook);
-        console.log(`🎯 Погреб: Цель -> ${target.name} (Мастерство: ${currentM}/${target.max_mastery})`);
+        console.log(`🎯 Погреб: Цель -> ${target.name} (Мастерство: ${target.current_mastery}/${target.max_mastery})`);
         
         return { mode: 'UPGRADE', url: url, name: target.name };
     }
