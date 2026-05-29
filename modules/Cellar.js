@@ -111,8 +111,8 @@ class CellarModule extends BaseModule {
         });
 
         if (candidates.length === 0) {
-            console.log('🎯 Погреб: Все доступные рецепты прокачаны на максимум, либо заняты! Переходим в режим FARM.');
-            return { mode: 'FARM' };
+            console.log('⏳ Погреб: Все рецепты прокачаны или заняты! Ждем освобождения полок...');
+            return { mode: 'WAIT' };
         }
 
         // Сортируем от самых высокоуровневых к простым
@@ -311,23 +311,26 @@ class CellarModule extends BaseModule {
                             let currentLevel = db.getProfile().level || 0;
                             let target = this.chooseTarget(db, currentLevel, cookingNow); // 🧠 Передаем занятые полки
                             
-                            // Если UPGRADE - идем по сгенерированной идеальной ссылке, иначе идем туда, куда ведет кнопка
-                            let actionUrl = (target.mode === 'UPGRADE' && target.url) ? target.url : this.getAbsoluteUrl(fillLink.href, startUrl);
-                            
-                            let recipe$ = await client.fetchHtml(actionUrl);
-                            if (recipe$) await this.cook(client, db, recipe$, actionUrl, target);
-                            
-                            // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ
-                            await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-                            
-                            db.saveTimer('kb_cel_timer', Date.now() + 3000);
-                            return;
+                            // Проверяем, не ушли ли мы в режим ожидания
+                            if (target.mode !== 'WAIT') {
+                                // Если UPGRADE - идем по сгенерированной идеальной ссылке, иначе идем туда, куда ведет кнопка
+                                let actionUrl = (target.mode === 'UPGRADE' && target.url) ? target.url : this.getAbsoluteUrl(fillLink.href, startUrl);
+                                
+                                let recipe$ = await client.fetchHtml(actionUrl);
+                                if (recipe$) await this.cook(client, db, recipe$, actionUrl, target);
+                                
+                                // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ
+                                await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
+                                
+                                db.saveTimer('kb_cel_timer', Date.now() + 3000);
+                                return;
+                            }
                         }
                     }
                 }
             }
 
-            // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ, ДАЖЕ ЕСЛИ ПРОСТО ЗАШЛИ СНЯТЬ ТАЙМЕРЫ
+            // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ, ДАЖЕ ЕСЛИ ПРОСТО ЗАШЛИ СНЯТЬ ТАЙМЕРЫ ИЛИ ЖДЕМ
             await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
 
             let minTimeMs = Infinity;
