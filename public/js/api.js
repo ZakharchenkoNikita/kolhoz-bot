@@ -59,6 +59,21 @@ export async function setLotteryTickets(buyTickets, event) {
     fetchState();
 }
 
+// 🧠 ДОБАВЛЕНО: Управление тумблером умной прокачки кулинарного мастерства в Погребе
+export async function toggleCulinarySkill(isSkillOn, event) {
+    if (!State.accountId) return;
+
+    // Обновляем локальный стейт, чтобы фронтенд сразу отреагировал
+    if (State.global) State.global.culinarySkill = isSkillOn;
+
+    await fetch('/api/account-setting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: State.accountId, key: 'culinary_skill', value: isSkillOn ? 'true' : 'false' })
+    });
+    fetchState(); // Опционально: перезапрашиваем стейт сервера для уверенности
+}
+
 export async function toggleModule(moduleId, isEnabled) {
     if(!State.accountId) return;
     await fetch('/api/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accountId: State.accountId, moduleName: moduleId, isEnabled }) });

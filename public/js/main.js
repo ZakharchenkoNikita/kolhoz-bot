@@ -1,6 +1,6 @@
 import { State } from './state.js';
 // 🚁 ИМПОРТ: Добавили setLotteryTickets
-import { fetchState, toggleModule, toggleMaster, resetModule, setLotteryPrio, setHeliTarget, setLotteryTickets } from './api.js';
+import { fetchState, toggleModule, toggleMaster, resetModule, setLotteryPrio, setHeliTarget, setLotteryTickets, toggleCulinarySkill } from './api.js';
 import { renderLoop, renderHouseCard } from './ui.js';
 import { initAccountsDropdown, changeAccountCustom, toggleAccountStatus, loadAccounts, addNewAccount, deleteAccount } from './accounts.js';
 import { switchNavView } from './settings.js';
@@ -18,6 +18,7 @@ window.switchNavView = switchNavView;
 // 🚁 ГЛОБАЛИЗАЦИЯ: Связываем функции с окном
 window.setHeliTarget = setHeliTarget;
 window.setLotteryTickets = setLotteryTickets;
+window.toggleCulinarySkill = toggleCulinarySkill;
 
 // 2. Навешиваем слушатели на статические кнопки интерфейса
 document.getElementById('account-dropdown-trigger').addEventListener('click', (e) => {

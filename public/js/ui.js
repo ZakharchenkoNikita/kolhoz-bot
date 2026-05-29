@@ -13,6 +13,21 @@ function buildModuleSettingsHtml(modId) {
     let title = '';
     let content = '';
 
+    if (moduleKey === 'cellar') {
+        let isSkillOn = settings.culinary_skill === 'true';
+        html += `
+        <div class="mb-2">
+            <label class="form-check-label d-flex align-items-center">
+                <input class="form-check-input me-2" type="checkbox" onchange="toggleCulinarySkill(${accountId}, this)" ${isSkillOn ? 'checked' : ''}>
+                🧠 Прокачка мастерства
+            </label>
+            <div class="form-text ms-4" style="font-size: 0.8rem; color: #aaa;">
+                Вкл: бот качает недокачанные рецепты (ставит по 1 банке).<br>
+                Выкл: бот ставит выбранный рецепт на все полки (фарм).
+            </div>
+        </div>`;
+    }
+
     if (modId === 'lottery') {
         title = 'Настройки Лотереи';
         let currentPrio = (State.global && State.global.lotPrio) ? State.global.lotPrio : 'price';
