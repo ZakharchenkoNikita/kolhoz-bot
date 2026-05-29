@@ -246,6 +246,14 @@ class CellarModule extends BaseModule {
     // ==========================================
     static async execute(client, db, workers) {
         try {
+            // --- ПРИНУДИТЕЛЬНАЯ ОЧИСТКА ПАМЯТИ (ОДИН РАЗ ЗА ЗАПУСК) ---
+            if (!this.isMemoryCleared) {
+                db.saveAccountSettings('kb_cel_cooking', '[]');
+                console.log('💣 Погреб: Фантомная память принудительно стерта кодом!');
+                this.isMemoryCleared = true;
+            }
+            // ----------------------------------------------------------
+
             // КОНТРОЛЬНЫЙ СКАН ПРИ ПЕРВОМ ЗАПУСКЕ БОТА
             if (!this.isInitialScanDone) {
                 console.log('🔍 Погреб: Первый запуск! Делаем контрольную синхронизацию Книги Рецептов...');
@@ -334,7 +342,10 @@ class CellarModule extends BaseModule {
                                 let recipe$ = await client.fetchHtml(actionUrl);
                                 if (recipe$) await this.cook(client, db, recipe$, actionUrl, target);
                                 
-                                // После успешной посадки 1 банки не возвращаем, продолжаем цикл (если есть еще пустые полки)
+                                // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ И ЗАПУСКАЕМ МИКРО-ЦИКЛ
+                                await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
+                                db.saveTimer('kb_cel_timer', Date.now() + 3000);
+                                return;
                             }
                         }
                     }
