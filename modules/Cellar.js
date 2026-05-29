@@ -125,7 +125,7 @@ class CellarModule extends BaseModule {
         let currentM = this.getRecipeMastery(target.name, recipeBook);
         console.log(`🎯 Погреб: Цель -> ${target.name} (Мастерство: ${currentM}/${target.max_mastery})`);
         
-        return { mode: 'UPGRADE', url: url };
+        return { mode: 'UPGRADE', url: url, name: target.name };
     }
 
     // ==========================================
@@ -211,15 +211,17 @@ class CellarModule extends BaseModule {
 
             // Добавляем рецепт в базу данных к текущим готовящимся
             try {
-                let cookingNow = [];
-                let savedCooking = db.getAccountSettings('kb_cel_cooking');
-                if (savedCooking) cookingNow = JSON.parse(savedCooking);
-                
-                let cleanRName = this.cleanName(target.name);
-                if (!cookingNow.includes(cleanRName)) {
-                    cookingNow.push(cleanRName);
-                    db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
-                    console.log(`📝 Погреб: Запомнили, что готовится рецепт -> ${target.name}`);
+                if (target.name) {
+                    let cookingNow = [];
+                    let savedCooking = db.getAccountSettings('kb_cel_cooking');
+                    if (savedCooking) cookingNow = JSON.parse(savedCooking);
+                    
+                    let cleanRName = this.cleanName(target.name);
+                    if (!cookingNow.includes(cleanRName)) {
+                        cookingNow.push(cleanRName);
+                        db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
+                        console.log(`📝 Погреб: Запомнили, что готовится рецепт -> ${target.name}`);
+                    }
                 }
             } catch (e) {
                 console.error("🚨 Ошибка сохранения kb_cel_cooking в БД:", e);
