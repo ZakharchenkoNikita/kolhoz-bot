@@ -102,9 +102,9 @@ class CellarModule extends BaseModule {
             if (currentM === 'MAX') return false; // Идеальный рецепт
             if (currentM >= r.max_mastery) return false; // Достиг лимита
             
-            // 🚫 Проверка на дубликаты: если корень названия уже есть на полке, пропускаем
+            // 🚫 Проверка на дубликаты: сверяем с объектами в памяти (name + таймер)
             let cleanRName = this.cleanName(r.name);
-            let isCooking = cookingNow.some(cn => cn.includes(cleanRName) || cleanRName.includes(cn));
+            let isCooking = cookingNow.some(cn => cn.name && (cn.name.includes(cleanRName) || cleanRName.includes(cn.name)));
             if (isCooking) return false;
             
             return true;
@@ -138,15 +138,12 @@ class CellarModule extends BaseModule {
             let $result = await client.fetchHtml(actionUrl);
             if ($result) {
                 let resultText = $result('body').text();
-                // Ловим табличку +X к.м.
-                if (resultText.includes('получили +') && resultText.includes('к.м.')) {
+                // Ловим табличку получения мастерства по точному тексту
+                if (resultText.includes('кулинарное мастерство увеличено с')) {
                     console.log(`🆙 Погреб: Получено кулинарное мастерство! Обновляем Книгу Рецептов...`);
                     let scanner = new RecipeBookScanner(client, db.db, workers.username);
                     await scanner.scan();
                 }
-                // Очищаем память занятых рецептов, так как всё продано и полки пустые
-                db.saveAccountSettings('kb_cel_cooking', JSON.stringify([]));
-                console.log(`🧹 Погреб: Память активных рецептов очищена после продажи.`);
             }
             db.saveTimer('kb_cel_timer', Date.now() + 3000);
             return true;
@@ -209,18 +206,26 @@ class CellarModule extends BaseModule {
             await client.fetchHtml(startUrl);
             console.log(`🍯 Погреб: Банки успешно поставлены!`);
 
-            // Добавляем рецепт в базу данных к текущим готовящимся
+            // Умное добавление рецепта с таймером в базу данных
             try {
                 if (target.name) {
                     let cookingNow = [];
                     let savedCooking = db.getAccountSettings('kb_cel_cooking');
-                    if (savedCooking) cookingNow = JSON.parse(savedCooking);
+                    if (savedCooking) {
+                        let parsed = JSON.parse(savedCooking);
+                        let now = Date.now();
+                        cookingNow = parsed.filter(item => item.finishTime > now); // Берем только актуальные
+                    }
                     
                     let cleanRName = this.cleanName(target.name);
-                    if (!cookingNow.includes(cleanRName)) {
-                        cookingNow.push(cleanRName);
+                    // Проверяем, нет ли его уже в списке (по name)
+                    if (!cookingNow.some(item => item.name === cleanRName)) {
+                        let targetTimeMin = target.time_min || 60; // дефолт 60 минут, если вдруг time_min пропал
+                        let finishTimeMs = Date.now() + (targetTimeMin * 60000) + 15000; // +15 секунд запаса
+                        cookingNow.push({ name: cleanRName, finishTime: finishTimeMs });
+                        
                         db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
-                        console.log(`📝 Погреб: Запомнили, что готовится рецепт -> ${target.name}`);
+                        console.log(`📝 Погреб: Запомнили рецепт -> ${target.name} (Таймер: ${targetTimeMin} мин)`);
                     }
                 }
             } catch (e) {
@@ -253,11 +258,22 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
             let pageText = $('body').text().toLowerCase();
 
-            // Получаем список занятых рецептов из базы данных (так как на странице они скрыты под "Экспериментальный")
+            // Получаем и АВТОМАТИЧЕСКИ ОЧИЩАЕМ список занятых рецептов
             let cookingNow = [];
             try {
                 let savedCooking = db.getAccountSettings('kb_cel_cooking');
-                if (savedCooking) cookingNow = JSON.parse(savedCooking);
+                if (savedCooking) {
+                    let parsed = JSON.parse(savedCooking);
+                    let now = Date.now();
+                    // Оставляем только те, время которых еще не истекло
+                    cookingNow = parsed.filter(item => item.finishTime > now);
+                    
+                    // Если просроченные рецепты были удалены - обновляем БД
+                    if (parsed.length !== cookingNow.length) {
+                        db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
+                        console.log(`🧹 Погреб: Освободились полки, память просроченных рецептов очищена.`);
+                    }
+                }
             } catch (e) {
                 console.error("🚨 Ошибка парсинга kb_cel_cooking из БД:", e);
             }
