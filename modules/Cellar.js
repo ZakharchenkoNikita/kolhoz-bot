@@ -278,12 +278,14 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
             let pageText = $('body').text().toLowerCase();
 
-            // 🐛 ВОЗВРАТ НАДЕЖНОГО ПАРСЕРА: Читаем строго из тегов <span class="title">
+            // 🔍 НОВЫЙ ПАРСЕР ЗАЛОЖЕННЫХ ПОЛОК: Ищем названия прямо в сыром тексте перед "(будет готово через"
             let cookingNow = [];
-            $('span.title').each((i, el) => {
-                let name = $(el).text().trim();
+            let R_COOKING = /(.{1,40})\s*\(\s*будет готово через/gi;
+            let cmatch;
+            while ((cmatch = R_COOKING.exec(pageText)) !== null) {
+                let name = cmatch[1].trim();
                 if (name && !cookingNow.includes(name)) cookingNow.push(name);
-            });
+            }
 
             let checkWork = () => {
                 if (allLinks.some(l => l.text.includes('продать всё') || l.text.includes('продать все'))) return true;
