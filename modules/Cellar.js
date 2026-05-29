@@ -73,50 +73,14 @@ class CellarModule extends BaseModule {
 
     static getRecipeMastery(dbName, recipeBook) {
         let cleanDb = this.cleanName(dbName);
-        
-        let checkValue = (val) => {
-            if (val === 'MAX' || (typeof val === 'string' && val.toLowerCase().includes('идеал'))) return 'MAX';
-            let parsed = parseInt(val, 10);
-            return Number.isNaN(parsed) ? 0 : parsed; // 0 — легальный ноль для открытых, но не начатых рецептов
-        };
-
-        // 1. Если база сохранилась как МАССИВ (Список)
-        if (Array.isArray(recipeBook)) {
-            for (let item of recipeBook) {
-                // Если элемент — объект вида {name: "Суп", mastery: 10}
-                if (item && item.name) {
-                    if (this.cleanName(item.name) === cleanDb) {
-                        let val = item.mastery !== undefined ? item.mastery : (item.value !== undefined ? item.value : item.progress);
-                        return checkValue(val);
-                    }
-                } 
-                // Если элемент — массив (кортеж) вида ["Суп", 10]
-                else if (Array.isArray(item) && item.length >= 2) {
-                    if (this.cleanName(item[0]) === cleanDb) {
-                        return checkValue(item[1]);
-                    }
-                } 
-                // Если элемент — объект вида {"Суп": 10}
-                else if (item && typeof item === 'object') {
-                    for (let key in item) {
-                        if (this.cleanName(key) === cleanDb) {
-                            return checkValue(item[key]);
-                        }
-                    }
-                }
-            }
-        } 
-        // 2. Если база сохранилась как СЛОВАРЬ (Объект)
-        else if (typeof recipeBook === 'object' && recipeBook !== null) {
-            for (let key in recipeBook) {
-                if (this.cleanName(key) === cleanDb) {
-                    return checkValue(recipeBook[key]);
-                }
+        for (let key in recipeBook) {
+            if (this.cleanName(key) === cleanDb) {
+                let val = recipeBook[key];
+                if (val === null || Number.isNaN(val) || val === 'NaN') return 'MAX';
+                return parseInt(val, 10);
             }
         }
-
-        // Рецепта физически нет в Книге (заблокирован или еще не открыт)
-        return 'LOCKED'; 
+        return 0; 
     }
 
     static chooseTarget(db, currentLevel, cookingNow = []) {
@@ -125,25 +89,12 @@ class CellarModule extends BaseModule {
 
         let profile = db.getProfile();
         let recipeBook = profile.recipe_book || {};
-        
-        // --- РАСПАКОВКА КНИГИ РЕЦЕПТОВ ИЗ СТРОКИ ---
-        if (typeof recipeBook === 'string') {
-            try {
-                recipeBook = JSON.parse(recipeBook);
-            } catch (e) {
-                console.error("🚨 Ошибка распаковки Книги Рецептов:", e);
-                recipeBook = {};
-            }
-        }
-        // ------------------------------------------
-
         let allRecipes = db.db.getAllRecipes(); 
 
         let candidates = allRecipes.filter(r => {
             if (r.req_level > currentLevel) return false; 
             
             let currentM = this.getRecipeMastery(r.name, recipeBook);
-            if (currentM === 'LOCKED') return false; // ⛔ Жесткий фейсконтроль
             if (currentM === 'MAX') return false; 
             if (currentM >= r.max_mastery) return false; 
             
