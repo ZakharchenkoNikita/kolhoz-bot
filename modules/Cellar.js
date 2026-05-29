@@ -64,54 +64,25 @@ class CellarModule extends BaseModule {
     }
 
     // ==========================================
-    // 🧠 ФАЗА ВЫБОРА ЦЕЛИ И УМНЫЕ ФИЛЬТРЫ
+    // 🧠 ФАЗА ВЫБОРА ЦЕЛИ И СВЕРКА С БАЗОЙ
     // ==========================================
     
-    static isCooking(dbName, cookingNames) {
-        let clean = (s) => s.toLowerCase().replace(/[^а-яёa-z]/gi, '');
-        let cleanDb = clean(dbName);
-        const getRoots = (str) => str.toLowerCase().replace(/[^а-яёa-z]/gi, ' ').split(/\s+/).filter(w => w.length > 3).map(w => w.substring(0, w.length - 2));
-        let dbRoots = getRoots(dbName);
-
-        for (let cn of cookingNames) {
-            if (clean(cn).includes(cleanDb) || cleanDb.includes(clean(cn))) return true; 
-            
-            let cnRoots = getRoots(cn);
-            if (dbRoots.length > 0 && cnRoots.length > 0) {
-                let matches = dbRoots.filter(dr => cnRoots.some(cr => cr.includes(dr) || dr.includes(cr)));
-                if (matches.length >= Math.min(dbRoots.length, cnRoots.length)) return true;
-            }
-        }
-        return false;
+    // Очищаем названия от приписки (авторский) для идеального совпадения
+    static cleanName(name) {
+        return name.toLowerCase().replace(/\(авторский\)/gi, '').trim();
     }
 
+    // Получаем реальный прогресс, учитывая NaN/null как Идеальный (MAX)
     static getRecipeMastery(dbName, recipeBook) {
-        let clean = (s) => s.toLowerCase().replace(/[^а-яёa-z]/gi, '');
-        let cleanDb = clean(dbName);
-        const getRoots = (str) => str.toLowerCase().replace(/[^а-яёa-z]/gi, ' ').split(/\s+/).filter(w => w.length > 3).map(w => w.substring(0, w.length - 2));
-        let dbRoots = getRoots(dbName);
-
+        let cleanDb = this.cleanName(dbName);
         for (let key in recipeBook) {
-            let isMatch = false;
-            let cleanKey = clean(key);
-            
-            if (cleanDb === cleanKey) {
-                isMatch = true;
-            } else {
-                let keyRoots = getRoots(key);
-                if (dbRoots.length > 0 && keyRoots.length > 0) {
-                    let matches = dbRoots.filter(dr => keyRoots.some(kr => kr.includes(dr) || dr.includes(kr)));
-                    if (matches.length >= Math.min(dbRoots.length, keyRoots.length)) isMatch = true;
-                }
-            }
-
-            if (isMatch) {
+            if (this.cleanName(key) === cleanDb) {
                 let val = recipeBook[key];
                 if (val === null || Number.isNaN(val) || val === 'NaN') return 'MAX';
                 return parseInt(val, 10);
             }
         }
-        return undefined; 
+        return undefined;
     }
 
     static chooseTarget(db, currentLevel, cookingNow = []) {
@@ -122,16 +93,19 @@ class CellarModule extends BaseModule {
         let recipeBook = profile.recipe_book || {};
         let allRecipes = db.db.getAllRecipes(); 
 
+        // Отбираем рецепты-кандидаты
         let candidates = allRecipes.filter(r => {
             if (r.req_level > currentLevel) return false; 
             
             let currentM = this.getRecipeMastery(r.name, recipeBook);
+            if (currentM === undefined) return false; // Скрыт или еще не открыт
+            if (currentM === 'MAX') return false; // Идеальный рецепт
+            if (currentM >= r.max_mastery) return false; // Достиг лимита
             
-            if (currentM === undefined) return false; 
-            if (currentM === 'MAX') return false; 
-            if (currentM >= r.max_mastery) return false; 
-            
-            if (this.isCooking(r.name, cookingNow)) return false; 
+            // 🚫 Проверка на дубликаты: если корень названия уже есть на полке, пропускаем
+            let cleanRName = this.cleanName(r.name);
+            let isCooking = cookingNow.some(cn => cn.includes(cleanRName) || cleanRName.includes(cn));
+            if (isCooking) return false;
             
             return true;
         });
@@ -141,6 +115,7 @@ class CellarModule extends BaseModule {
             return { mode: 'FARM' };
         }
 
+        // Сортируем от самых высокоуровневых к простым
         candidates.sort((a, b) => b.req_level - a.req_level);
         let target = candidates[0];
 
@@ -150,7 +125,7 @@ class CellarModule extends BaseModule {
         let currentM = this.getRecipeMastery(target.name, recipeBook);
         console.log(`🎯 Погреб: Цель -> ${target.name} (Мастерство: ${currentM}/${target.max_mastery})`);
         
-        return { mode: 'UPGRADE', url: url, name: target.name, max_mastery: target.max_mastery };
+        return { mode: 'UPGRADE', url: url };
     }
 
     // ==========================================
@@ -179,27 +154,7 @@ class CellarModule extends BaseModule {
     // ==========================================
     // 🍯 ФАЗА ЗАКЛАДКИ
     // ==========================================
-    static async cook(client, db, $, currentUrl, target, workers) {
-        let pageText = $('body').text().toLowerCase();
-
-        let isMaxed = false;
-        let masteryMatch = pageText.match(/кулинарное мастерство:\s*(\d+)/i);
-        if (masteryMatch && target.max_mastery) {
-            let currentM = parseInt(masteryMatch[1], 10);
-            if (currentM >= target.max_mastery) isMaxed = true;
-        }
-        
-        if (pageText.includes('идеальный') || pageText.includes('идеальная') || pageText.includes('идеальное')) {
-            isMaxed = true;
-        }
-
-        if (target.mode === 'UPGRADE' && isMaxed) {
-            console.log(`✨ Погреб: Стоп! Рецепт "${target.name}" достиг максимума! Обновляем Книгу Рецептов.`);
-            let scanner = new RecipeBookScanner(client, db.db, workers.username);
-            await scanner.scan();
-            return false; 
-        }
-
+    static async cook(client, db, $, currentUrl, target) {
         let allLinks = [];
         $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
 
@@ -210,36 +165,37 @@ class CellarModule extends BaseModule {
                 console.log(`❌ Погреб: Не хватает монет для закупки! Уходим в паузу на 2 часа.`);
                 db.saveTimer('kb_cel_pause', Date.now() + 7200000);
                 db.saveTimer('kb_cel_buying', 0);
-                return false;
+                return;
             }
 
             let bL;
             if (target.mode === 'UPGRADE') {
-                bL = buyLinks[0]; 
+                bL = buyLinks[0]; // На 1 порцию
                 console.log(`🛒 Погреб: Закупаем на 1 порцию (Прокачка мастерства)`);
             } else {
-                bL = buyLinks[buyLinks.length - 1]; 
+                bL = buyLinks[buyLinks.length - 1]; // На все доступные полки
                 console.log(`🛒 Погреб: Закупаем на все полки (Обычный фарм)`);
             }
 
             let buyUrl = this.getAbsoluteUrl(bL.href, currentUrl);
             db.saveTimer('kb_cel_buying', Date.now() + 15000);
             $ = await client.fetchHtml(buyUrl);
-            if (!$) return false;
+            if (!$) return;
 
             allLinks = [];
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
         }
 
-        // 🐛 ИСПРАВЛЕНИЕ БАГА "КЛОНИРОВАНИЯ": Жестко разграничиваем 1 полку и "Всё"
+        // 🛡️ ЖЕСТКОЕ РАЗДЕЛЕНИЕ КНОПОК ПОСАДКИ
         let startLink;
         if (target.mode === 'UPGRADE') {
-            // Строго на 1 порцию. Исключаем putAllLink!
+            // В режиме Прокачки ищем только одиночную кнопку, игнорируем массовую
             startLink = allLinks.find(l => l.text === 'поставить' || (l.href.includes('putLink') && !l.href.includes('putAllLink')));
         } else {
-            // Заготовить всё
+            // В режиме Фарма ищем "Заготовить всё"
             startLink = allLinks.find(l => l.text.includes('заготовить всё') || l.href.includes('putAllLink'));
             if (!startLink) {
+                // Запасной вариант, если доступна только 1 полка
                 startLink = allLinks.find(l => l.text === 'поставить' || l.href.includes('putLink'));
             }
         }
@@ -249,9 +205,7 @@ class CellarModule extends BaseModule {
             db.saveTimer('kb_cel_buying', 0); 
             await client.fetchHtml(startUrl);
             console.log(`🍯 Погреб: Банки успешно поставлены!`);
-            return true;
         }
-        return false;
     }
 
     // ==========================================
@@ -278,12 +232,12 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
             let pageText = $('body').text().toLowerCase();
 
-            // 🔍 НОВЫЙ ПАРСЕР ЗАЛОЖЕННЫХ ПОЛОК: Ищем названия прямо в сыром тексте перед "(будет готово через"
+            // 🔍 ПАРСИМ ЗАНЯТЫЕ ПОЛКИ: Берем текст прямо перед таймером (останавливаясь до скобки)
             let cookingNow = [];
-            let R_COOKING = /(.{1,40})\s*\(\s*будет готово через/gi;
+            let R_COOKING = /([^\(]{1,50})\s*\(\s*будет готово через/gi;
             let cmatch;
             while ((cmatch = R_COOKING.exec(pageText)) !== null) {
-                let name = cmatch[1].trim();
+                let name = this.cleanName(cmatch[1]);
                 if (name && !cookingNow.includes(name)) cookingNow.push(name);
             }
 
@@ -296,6 +250,7 @@ class CellarModule extends BaseModule {
             if (checkWork()) {
                 let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
 
+                // Если включена Дарья И мы НЕ в режиме умной прокачки
                 if (db.getAccountSettings('use_workers') === 'true' && !isSkillOn) {
                     console.log(`👩‍🍳 Погреб: Нанимаем Дарью для работы...`);
                     db.saveTimer('kb_cel_timer', Date.now() + 60000);
@@ -303,39 +258,39 @@ class CellarModule extends BaseModule {
                     return;
                 } 
                 else {
+                    // ФАЗА СБОРА
                     let harvested = await this.harvest(client, db, $, startUrl, allLinks, workers);
                     if (harvested) {
+                        // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ
                         await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
                         return;
                     }
 
+                    // ФАЗА ЗАКЛАДКИ
                     if (pageText.includes('пустая полка')) {
                         let fillLink = allLinks.find(l => l.href.includes('putAllLink') || l.text.includes('заготовить всё') || l.text.includes('выбрать'));
                         
                         if (fillLink) {
                             let currentLevel = db.getProfile().level || 0;
-                            let target = this.chooseTarget(db, currentLevel, cookingNow); 
+                            let target = this.chooseTarget(db, currentLevel, cookingNow); // 🧠 Передаем занятые полки
                             
+                            // Если UPGRADE - идем по сгенерированной идеальной ссылке, иначе идем туда, куда ведет кнопка
                             let actionUrl = (target.mode === 'UPGRADE' && target.url) ? target.url : this.getAbsoluteUrl(fillLink.href, startUrl);
                             
                             let recipe$ = await client.fetchHtml(actionUrl);
-                            if (recipe$) {
-                                let isCooked = await this.cook(client, db, recipe$, actionUrl, target, workers);
-                                
-                                await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-                                
-                                if (isCooked) {
-                                    db.saveTimer('kb_cel_timer', Date.now() + 3000); 
-                                } else {
-                                    db.saveTimer('kb_cel_timer', Date.now() + 1500); 
-                                }
-                                return;
-                            }
+                            if (recipe$) await this.cook(client, db, recipe$, actionUrl, target);
+                            
+                            // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ
+                            await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
+                            
+                            db.saveTimer('kb_cel_timer', Date.now() + 3000);
+                            return;
                         }
                     }
                 }
             }
 
+            // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ, ДАЖЕ ЕСЛИ ПРОСТО ЗАШЛИ СНЯТЬ ТАЙМЕРЫ
             await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
 
             let minTimeMs = Infinity;
