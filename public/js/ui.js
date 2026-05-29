@@ -13,19 +13,23 @@ function buildModuleSettingsHtml(modId) {
     let title = '';
     let content = '';
 
-    if (moduleKey === 'cellar') {
-        let isSkillOn = settings.culinary_skill === 'true';
-        html += `
-        <div class="mb-2">
-            <label class="form-check-label d-flex align-items-center">
-                <input class="form-check-input me-2" type="checkbox" onchange="toggleCulinarySkill(${accountId}, this)" ${isSkillOn ? 'checked' : ''}>
-                🧠 Прокачка мастерства
-            </label>
-            <div class="form-text ms-4" style="font-size: 0.8rem; color: #aaa;">
-                Вкл: бот качает недокачанные рецепты (ставит по 1 банке).<br>
-                Выкл: бот ставит выбранный рецепт на все полки (фарм).
+    if (modId === 'cellar') {
+        title = 'Настройки Погреба';
+        let isSkillOn = (State.global && State.global.culinary_skill === 'true');
+        
+        content = `
+            <div class="settings-row">
+                <span class="settings-label">Умная прокачка (1 банка)</span>
+                <label class="ios-switch">
+                    <input type="checkbox" ${isSkillOn ? 'checked' : ''} onchange="window.toggleCulinarySkill(this.checked, event)">
+                    <span class="slider"></span>
+                </label>
             </div>
-        </div>`;
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px; line-height: 1.2;">
+                Вкл: качает мастерство недокачанных рецептов.<br>
+                Выкл: ставит выбранный рецепт на все полки (фарм).
+            </div>
+        `;
     }
 
     if (modId === 'lottery') {
@@ -118,7 +122,7 @@ export function initDashboard() {
         const title = mod.name.substring(mod.name.indexOf(' ') + 1);
         
         let gearBtn = '';
-        if (mod.id === 'lottery' || mod.id === 'heli') {
+        if (mod.id === 'lottery' || mod.id === 'heli' || mod.id === 'cellar') {
             gearBtn = `
                 <button class="btn-reset" onclick="window.toggleModuleSettings('${mod.id}', event)" title="Настройки">
                     ${VectorIcons.gear}
