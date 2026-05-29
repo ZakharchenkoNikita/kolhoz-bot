@@ -85,7 +85,6 @@ class CellarModule extends BaseModule {
         return false;
     }
 
-    // 🛡️ Умный парсер мастерства из Книги Рецептов (обходит проблему перестановки слов и NaN/null)
     static getRecipeMastery(dbName, recipeBook) {
         let clean = (s) => s.toLowerCase().replace(/[^а-яёa-z]/gi, '');
         let cleanDb = clean(dbName);
@@ -108,12 +107,11 @@ class CellarModule extends BaseModule {
 
             if (isMatch) {
                 let val = recipeBook[key];
-                // Если сканер не смог прочитать число и записал null или NaN - рецепт прокачан на 100%
                 if (val === null || Number.isNaN(val) || val === 'NaN') return 'MAX';
                 return parseInt(val, 10);
             }
         }
-        return undefined; // Рецепт не найден в книге (скрыт)
+        return undefined; 
     }
 
     static chooseTarget(db, currentLevel, cookingNow = []) {
@@ -129,11 +127,11 @@ class CellarModule extends BaseModule {
             
             let currentM = this.getRecipeMastery(r.name, recipeBook);
             
-            if (currentM === undefined) return false; // Скрыт/не открыт
-            if (currentM === 'MAX') return false; // Идеальный (null/NaN)
-            if (currentM >= r.max_mastery) return false; // Достиг лимита мастерства по базе
+            if (currentM === undefined) return false; 
+            if (currentM === 'MAX') return false; 
+            if (currentM >= r.max_mastery) return false; 
             
-            if (this.isCooking(r.name, cookingNow)) return false; // Уже варится
+            if (this.isCooking(r.name, cookingNow)) return false; 
             
             return true;
         });
@@ -184,17 +182,13 @@ class CellarModule extends BaseModule {
     static async cook(client, db, $, currentUrl, target, workers) {
         let pageText = $('body').text().toLowerCase();
 
-        // 🛑 УМНАЯ ПРОВЕРКА МАСТЕРСТВА ПЕРЕД ЗАКЛАДКОЙ (ДВОЙНАЯ ЗАЩИТА)
         let isMaxed = false;
-        
-        // Проверка по точному числу (как ты и просил)
         let masteryMatch = pageText.match(/кулинарное мастерство:\s*(\d+)/i);
         if (masteryMatch && target.max_mastery) {
             let currentM = parseInt(masteryMatch[1], 10);
             if (currentM >= target.max_mastery) isMaxed = true;
         }
         
-        // Резервная проверка на слово
         if (pageText.includes('идеальный') || pageText.includes('идеальная') || pageText.includes('идеальное')) {
             isMaxed = true;
         }
@@ -203,7 +197,7 @@ class CellarModule extends BaseModule {
             console.log(`✨ Погреб: Стоп! Рецепт "${target.name}" достиг максимума! Обновляем Книгу Рецептов.`);
             let scanner = new RecipeBookScanner(client, db.db, workers.username);
             await scanner.scan();
-            return false; // Отменяем варку, чтобы выбрать другую цель
+            return false; 
         }
 
         let allLinks = [];
@@ -221,10 +215,10 @@ class CellarModule extends BaseModule {
 
             let bL;
             if (target.mode === 'UPGRADE') {
-                bL = buyLinks[0]; // На 1 порцию
+                bL = buyLinks[0]; 
                 console.log(`🛒 Погреб: Закупаем на 1 порцию (Прокачка мастерства)`);
             } else {
-                bL = buyLinks[buyLinks.length - 1]; // На все доступные полки
+                bL = buyLinks[buyLinks.length - 1]; 
                 console.log(`🛒 Погреб: Закупаем на все полки (Обычный фарм)`);
             }
 
@@ -237,7 +231,19 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
         }
 
-        let startLink = allLinks.find(l => l.text === 'поставить' || l.href.includes('putLink'));
+        // 🐛 ИСПРАВЛЕНИЕ БАГА "КЛОНИРОВАНИЯ": Жестко разграничиваем 1 полку и "Всё"
+        let startLink;
+        if (target.mode === 'UPGRADE') {
+            // Строго на 1 порцию. Исключаем putAllLink!
+            startLink = allLinks.find(l => l.text === 'поставить' || (l.href.includes('putLink') && !l.href.includes('putAllLink')));
+        } else {
+            // Заготовить всё
+            startLink = allLinks.find(l => l.text.includes('заготовить всё') || l.href.includes('putAllLink'));
+            if (!startLink) {
+                startLink = allLinks.find(l => l.text === 'поставить' || l.href.includes('putLink'));
+            }
+        }
+
         if (startLink) {
             let startUrl = this.getAbsoluteUrl(startLink.href, currentUrl);
             db.saveTimer('kb_cel_buying', 0); 
@@ -272,14 +278,12 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
             let pageText = $('body').text().toLowerCase();
 
-            // 🔍 ПРИЦЕЛЬНО ПАРСИМ РЕЦЕПТЫ, КОТОРЫЕ УЖЕ СТОЯТ НА ПОЛКАХ (через регулярку из текста страницы)
+            // 🐛 ВОЗВРАТ НАДЕЖНОГО ПАРСЕРА: Читаем строго из тегов <span class="title">
             let cookingNow = [];
-            let R_COOKING = /([^\(]{1,40})\s*\(\s*будет готово через/gi;
-            let cmatch;
-            while ((cmatch = R_COOKING.exec(pageText)) !== null) {
-                let name = cmatch[1].replace(/[^а-яёa-z\s\-]/gi, ' ').trim();
+            $('span.title').each((i, el) => {
+                let name = $(el).text().trim();
                 if (name && !cookingNow.includes(name)) cookingNow.push(name);
-            }
+            });
 
             let checkWork = () => {
                 if (allLinks.some(l => l.text.includes('продать всё') || l.text.includes('продать все'))) return true;
