@@ -48,7 +48,7 @@ class Scheduler {
                 this.db.saveTimer(acc.id, 'kb_zav_timer', 0); 
                 this.db.saveTimer(acc.id, 'kb_arena_timer', 0);
 
-                this.db.saveTimer(acc.id, 'kb_rb_timer', 0);
+                // this.db.saveTimer(acc.id, 'kb_rb_timer', 0);
                 count++;
             }
         });

@@ -101,6 +101,18 @@ class CellarModule extends BaseModule {
 
         let profile = db.getProfile();
         let recipeBook = profile.recipe_book || {};
+        
+        // --- РАСПАКОВКА КНИГИ РЕЦЕПТОВ ИЗ СТРОКИ ---
+        if (typeof recipeBook === 'string') {
+            try {
+                recipeBook = JSON.parse(recipeBook);
+            } catch (e) {
+                console.error("🚨 Ошибка распаковки Книги Рецептов:", e);
+                recipeBook = {};
+            }
+        }
+        // ------------------------------------------
+
         let allRecipes = db.db.getAllRecipes(); 
 
         let candidates = allRecipes.filter(r => {
