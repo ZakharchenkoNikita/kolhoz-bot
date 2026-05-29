@@ -64,28 +64,56 @@ class CellarModule extends BaseModule {
     }
 
     // ==========================================
-    // 🧠 ФАЗА ВЫБОРА ЦЕЛИ
+    // 🧠 ФАЗА ВЫБОРА ЦЕЛИ И УМНЫЕ ФИЛЬТРЫ
     // ==========================================
     
-    // 🛡️ Умный фильтр для проверки, варится ли уже этот рецепт (игнорирует окончания и порядок слов)
     static isCooking(dbName, cookingNames) {
         let clean = (s) => s.toLowerCase().replace(/[^а-яёa-z]/gi, '');
         let cleanDb = clean(dbName);
-        
         const getRoots = (str) => str.toLowerCase().replace(/[^а-яёa-z]/gi, ' ').split(/\s+/).filter(w => w.length > 3).map(w => w.substring(0, w.length - 2));
         let dbRoots = getRoots(dbName);
 
         for (let cn of cookingNames) {
-            if (cleanDb === clean(cn)) return true; // Точное совпадение без учета пробелов
+            if (clean(cn).includes(cleanDb) || cleanDb.includes(clean(cn))) return true; 
             
             let cnRoots = getRoots(cn);
             if (dbRoots.length > 0 && cnRoots.length > 0) {
-                // Ищем пересечение корней слов
                 let matches = dbRoots.filter(dr => cnRoots.some(cr => cr.includes(dr) || dr.includes(cr)));
                 if (matches.length >= Math.min(dbRoots.length, cnRoots.length)) return true;
             }
         }
         return false;
+    }
+
+    // 🛡️ Умный парсер мастерства из Книги Рецептов (обходит проблему перестановки слов и NaN/null)
+    static getRecipeMastery(dbName, recipeBook) {
+        let clean = (s) => s.toLowerCase().replace(/[^а-яёa-z]/gi, '');
+        let cleanDb = clean(dbName);
+        const getRoots = (str) => str.toLowerCase().replace(/[^а-яёa-z]/gi, ' ').split(/\s+/).filter(w => w.length > 3).map(w => w.substring(0, w.length - 2));
+        let dbRoots = getRoots(dbName);
+
+        for (let key in recipeBook) {
+            let isMatch = false;
+            let cleanKey = clean(key);
+            
+            if (cleanDb === cleanKey) {
+                isMatch = true;
+            } else {
+                let keyRoots = getRoots(key);
+                if (dbRoots.length > 0 && keyRoots.length > 0) {
+                    let matches = dbRoots.filter(dr => keyRoots.some(kr => kr.includes(dr) || dr.includes(kr)));
+                    if (matches.length >= Math.min(dbRoots.length, keyRoots.length)) isMatch = true;
+                }
+            }
+
+            if (isMatch) {
+                let val = recipeBook[key];
+                // Если сканер не смог прочитать число и записал null или NaN - рецепт прокачан на 100%
+                if (val === null || Number.isNaN(val) || val === 'NaN') return 'MAX';
+                return parseInt(val, 10);
+            }
+        }
+        return undefined; // Рецепт не найден в книге (скрыт)
     }
 
     static chooseTarget(db, currentLevel, cookingNow = []) {
@@ -96,12 +124,17 @@ class CellarModule extends BaseModule {
         let recipeBook = profile.recipe_book || {};
         let allRecipes = db.db.getAllRecipes(); 
 
-        // Отбираем рецепты-кандидаты
         let candidates = allRecipes.filter(r => {
             if (r.req_level > currentLevel) return false; 
-            if (recipeBook[r.name] === undefined) return false; 
-            if (recipeBook[r.name] >= r.max_mastery) return false; 
-            if (this.isCooking(r.name, cookingNow)) return false; // 🚫 ИСКЛЮЧАЕМ ТО, ЧТО УЖЕ ВАРИТСЯ (умный фильтр)
+            
+            let currentM = this.getRecipeMastery(r.name, recipeBook);
+            
+            if (currentM === undefined) return false; // Скрыт/не открыт
+            if (currentM === 'MAX') return false; // Идеальный (null/NaN)
+            if (currentM >= r.max_mastery) return false; // Достиг лимита мастерства по базе
+            
+            if (this.isCooking(r.name, cookingNow)) return false; // Уже варится
+            
             return true;
         });
 
@@ -110,16 +143,16 @@ class CellarModule extends BaseModule {
             return { mode: 'FARM' };
         }
 
-        // Сортируем от самых высокоуровневых к простым
         candidates.sort((a, b) => b.req_level - a.req_level);
         let target = candidates[0];
 
         let ings = Array.isArray(target.ingredients) ? target.ingredients.join('/') : target.ingredients;
         let url = `/recipe/${target.id}/${ings}/${target.time_min}/${target.hash}`;
         
-        console.log(`🎯 Погреб: Цель -> ${target.name} (Мастерство: ${recipeBook[target.name] || 0}/${target.max_mastery})`);
+        let currentM = this.getRecipeMastery(target.name, recipeBook);
+        console.log(`🎯 Погреб: Цель -> ${target.name} (Мастерство: ${currentM}/${target.max_mastery})`);
         
-        return { mode: 'UPGRADE', url: url, name: target.name };
+        return { mode: 'UPGRADE', url: url, name: target.name, max_mastery: target.max_mastery };
     }
 
     // ==========================================
@@ -151,9 +184,23 @@ class CellarModule extends BaseModule {
     static async cook(client, db, $, currentUrl, target, workers) {
         let pageText = $('body').text().toLowerCase();
 
-        // 🛑 ПРОВЕРКА НА ИДЕАЛЬНЫЙ РЕЦЕПТ ДО ЗАКЛАДКИ
-        if (target.mode === 'UPGRADE' && (pageText.includes('идеальный') || pageText.includes('идеальная') || pageText.includes('идеальное'))) {
-            console.log(`✨ Погреб: Стоп! Рецепт "${target.name}" уже идеальный! Обновляем Книгу Рецептов.`);
+        // 🛑 УМНАЯ ПРОВЕРКА МАСТЕРСТВА ПЕРЕД ЗАКЛАДКОЙ (ДВОЙНАЯ ЗАЩИТА)
+        let isMaxed = false;
+        
+        // Проверка по точному числу (как ты и просил)
+        let masteryMatch = pageText.match(/кулинарное мастерство:\s*(\d+)/i);
+        if (masteryMatch && target.max_mastery) {
+            let currentM = parseInt(masteryMatch[1], 10);
+            if (currentM >= target.max_mastery) isMaxed = true;
+        }
+        
+        // Резервная проверка на слово
+        if (pageText.includes('идеальный') || pageText.includes('идеальная') || pageText.includes('идеальное')) {
+            isMaxed = true;
+        }
+
+        if (target.mode === 'UPGRADE' && isMaxed) {
+            console.log(`✨ Погреб: Стоп! Рецепт "${target.name}" достиг максимума! Обновляем Книгу Рецептов.`);
             let scanner = new RecipeBookScanner(client, db.db, workers.username);
             await scanner.scan();
             return false; // Отменяем варку, чтобы выбрать другую цель
@@ -225,12 +272,14 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
             let pageText = $('body').text().toLowerCase();
 
-            // 🔍 ПРИЦЕЛЬНО ПАРСИМ РЕЦЕПТЫ, КОТОРЫЕ УЖЕ СТОЯТ НА ПОЛКАХ (из тегов <span class="title">)
+            // 🔍 ПРИЦЕЛЬНО ПАРСИМ РЕЦЕПТЫ, КОТОРЫЕ УЖЕ СТОЯТ НА ПОЛКАХ (через регулярку из текста страницы)
             let cookingNow = [];
-            $('span.title').each((i, el) => {
-                let name = $(el).text().trim();
+            let R_COOKING = /([^\(]{1,40})\s*\(\s*будет готово через/gi;
+            let cmatch;
+            while ((cmatch = R_COOKING.exec(pageText)) !== null) {
+                let name = cmatch[1].replace(/[^а-яёa-z\s\-]/gi, ' ').trim();
                 if (name && !cookingNow.includes(name)) cookingNow.push(name);
-            });
+            }
 
             let checkWork = () => {
                 if (allLinks.some(l => l.text.includes('продать всё') || l.text.includes('продать все'))) return true;
@@ -241,7 +290,6 @@ class CellarModule extends BaseModule {
             if (checkWork()) {
                 let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
 
-                // Если включена Дарья И мы НЕ в режиме умной прокачки
                 if (db.getAccountSettings('use_workers') === 'true' && !isSkillOn) {
                     console.log(`👩‍🍳 Погреб: Нанимаем Дарью для работы...`);
                     db.saveTimer('kb_cel_timer', Date.now() + 60000);
@@ -249,21 +297,18 @@ class CellarModule extends BaseModule {
                     return;
                 } 
                 else {
-                    // ФАЗА СБОРА
                     let harvested = await this.harvest(client, db, $, startUrl, allLinks, workers);
                     if (harvested) {
-                        // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ
                         await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
                         return;
                     }
 
-                    // ФАЗА ЗАКЛАДКИ
                     if (pageText.includes('пустая полка')) {
                         let fillLink = allLinks.find(l => l.href.includes('putAllLink') || l.text.includes('заготовить всё') || l.text.includes('выбрать'));
                         
                         if (fillLink) {
                             let currentLevel = db.getProfile().level || 0;
-                            let target = this.chooseTarget(db, currentLevel, cookingNow); // 🧠 Передаем занятые полки
+                            let target = this.chooseTarget(db, currentLevel, cookingNow); 
                             
                             let actionUrl = (target.mode === 'UPGRADE' && target.url) ? target.url : this.getAbsoluteUrl(fillLink.href, startUrl);
                             
@@ -271,13 +316,12 @@ class CellarModule extends BaseModule {
                             if (recipe$) {
                                 let isCooked = await this.cook(client, db, recipe$, actionUrl, target, workers);
                                 
-                                // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ
                                 await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
                                 
                                 if (isCooked) {
-                                    db.saveTimer('kb_cel_timer', Date.now() + 3000); // Банка поставлена, переходим к следующей
+                                    db.saveTimer('kb_cel_timer', Date.now() + 3000); 
                                 } else {
-                                    db.saveTimer('kb_cel_timer', Date.now() + 1500); // Банка отменена (рецепт идеальный), быстрый рестарт
+                                    db.saveTimer('kb_cel_timer', Date.now() + 1500); 
                                 }
                                 return;
                             }
@@ -286,7 +330,6 @@ class CellarModule extends BaseModule {
                 }
             }
 
-            // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ, ДАЖЕ ЕСЛИ ПРОСТО ЗАШЛИ СНЯТЬ ТАЙМЕРЫ
             await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
 
             let minTimeMs = Infinity;
