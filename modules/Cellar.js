@@ -123,9 +123,33 @@ class CellarModule extends BaseModule {
     }
 
     // ==========================================
-    // 🚜 ФАЗА СБОРА
+    // 🚜 ВНУТРЕННИЕ ИНСТРУМЕНТЫ (НОВАЯ АРХИТЕКТУРА)
     // ==========================================
-    static async harvest(client, db, $, currentUrl, allLinks, workers) {
+    
+    // 1. РАЗВЕДЧИК
+    static analyzeStatus($, pageText, allLinks) {
+        let canHarvest = allLinks.some(l => l.text.includes('продать всё') || l.text.includes('продать все'));
+        
+        // Точный подсчет пустых полок по HTML-маркеру
+        let emptyShelves = 0;
+        if ($) {
+            $('span.title').each((i, el) => {
+                if ($(el).text().toLowerCase().includes('пустая полка')) {
+                    emptyShelves++;
+                }
+            });
+        }
+        // Запасной вариант на случай изменений верстки
+        if (emptyShelves === 0 && pageText.includes('пустая полка')) {
+            let match = pageText.match(/пустая полка/gi);
+            if (match) emptyShelves = match.length;
+        }
+
+        return { canHarvest, emptyShelves };
+    }
+
+    // 2. СБОРЩИК
+    static async handleHarvest(client, db, currentUrl, allLinks) {
         let sellLink = allLinks.find(l => l.text.includes('продать всё') || l.text.includes('продать все'));
         if (sellLink) {
             let actionUrl = this.getAbsoluteUrl(sellLink.href, currentUrl);
@@ -140,8 +164,75 @@ class CellarModule extends BaseModule {
         return false;
     }
 
+    // 3. КОНВЕЙЕР ПОСАДКИ
+    static async handlePlanting(client, db, startUrl, emptyShelvesCount, currentLevel, workers) {
+        console.log(`🔍 Погреб: Вижу ${emptyShelvesCount} пустых полок! Сканируем Книгу Рецептов перед конвейером...`);
+        let scanner = new RecipeBookScanner(client, db.db, workers.username);
+        await scanner.scan();
+
+        let $ = await client.fetchHtml(startUrl);
+        if (!$) return null;
+
+        // Жесткий цикл по количеству пустых полок
+        for (let i = 0; i < emptyShelvesCount; i++) {
+            // На каждом круге гарантируем, что панель открыта
+            $ = await this.openPanel(client, $, startUrl);
+            
+            let allLinks = [];
+            $('a').each((idx, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
+
+            let fillLink = allLinks.find(l => l.href.includes('putAllLink') || l.text.includes('заготовить всё') || l.text.includes('выбрать'));
+            if (!fillLink) {
+                break; // Кнопка пропала, выходим из цикла
+            }
+
+            // Обновляем память о том, что мы уже посадили на предыдущих кругах
+            let cookingNow = [];
+            try {
+                let savedCooking = db.getAccountSettings('kb_cel_cooking');
+                if (savedCooking) {
+                    cookingNow = JSON.parse(savedCooking).filter(item => item.finishTime > Date.now());
+                }
+            } catch (e) {}
+
+            let target = this.chooseTarget(db, currentLevel, cookingNow);
+            if (target.mode === 'WAIT') {
+                break; // Подходящих рецептов больше нет
+            }
+
+            let actionUrl = (target.mode === 'UPGRADE' && target.url) ? target.url : this.getAbsoluteUrl(fillLink.href, startUrl);
+            let recipe$ = await client.fetchHtml(actionUrl);
+            
+            if (recipe$) {
+                await this.cook(client, db, recipe$, actionUrl, target); // Сама посадка
+            }
+
+            // Скачиваем свежую страницу для следующего круга
+            $ = await client.fetchHtml(startUrl);
+            if (!$) break;
+        }
+
+        // Сворачиваем панель после завершения конвейера
+        $ = await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
+        return $; // Возвращаем финальную страницу Хронометристу
+    }
+
+    // 4. ХРОНОМЕТРИСТ
+    static updateSleepTimer(db, pageText) {
+        let minTimeMs = Infinity;
+        let R_TIMERS = /(?:через|осталось)\s+(.{0,30})/gi;
+        let match;
+        while ((match = R_TIMERS.exec(pageText)) !== null) {
+            let ms = this.extractTime(match[1]);
+            if (ms !== null && ms > 0 && ms < minTimeMs) minTimeMs = ms;
+        }
+
+        if (minTimeMs === Infinity) minTimeMs = 300000;
+        db.saveTimer('kb_cel_timer', Date.now() + minTimeMs);
+    }
+
     // ==========================================
-    // 🍯 ФАЗА ЗАКЛАДКИ
+    // 🍯 МЕТОД ФИЗИЧЕСКОЙ ПОСАДКИ (COOK)
     // ==========================================
     static async cook(client, db, $, currentUrl, target) {
         let allLinks = [];
@@ -157,14 +248,8 @@ class CellarModule extends BaseModule {
                 return;
             }
 
-            let bL;
-            if (target.mode === 'UPGRADE') {
-                bL = buyLinks[0]; 
-                console.log(`🛒 Погреб: Закупаем на 1 порцию (Прокачка мастерства)`);
-            } else {
-                bL = buyLinks[buyLinks.length - 1]; 
-                console.log(`🛒 Погреб: Закупаем на все полки (Обычный фарм)`);
-            }
+            let bL = (target.mode === 'UPGRADE') ? buyLinks[0] : buyLinks[buyLinks.length - 1]; 
+            console.log(target.mode === 'UPGRADE' ? `🛒 Погреб: Закупаем на 1 порцию (Прокачка)` : `🛒 Погреб: Закупаем на все полки (Фарм)`);
 
             let buyUrl = this.getAbsoluteUrl(bL.href, currentUrl);
             db.saveTimer('kb_cel_buying', Date.now() + 15000);
@@ -180,9 +265,7 @@ class CellarModule extends BaseModule {
             startLink = allLinks.find(l => l.text === 'поставить' || (l.href.includes('putLink') && !l.href.includes('putAllLink')));
         } else {
             startLink = allLinks.find(l => l.text.includes('заготовить всё') || l.href.includes('putAllLink'));
-            if (!startLink) {
-                startLink = allLinks.find(l => l.text === 'поставить' || l.href.includes('putLink'));
-            }
+            if (!startLink) startLink = allLinks.find(l => l.text === 'поставить' || l.href.includes('putLink'));
         }
 
         if (startLink) {
@@ -192,7 +275,6 @@ class CellarModule extends BaseModule {
             
             if (result$) {
                 let pageText = result$('body').text().toLowerCase();
-                
                 if (pageText.includes('будет готово через') || pageText.includes('осталось')) {
                     console.log(`🍯 Погреб: Банки успешно поставлены и подтверждены игрой!`);
                     
@@ -201,9 +283,7 @@ class CellarModule extends BaseModule {
                             let cookingNow = [];
                             let savedCooking = db.getAccountSettings('kb_cel_cooking');
                             if (savedCooking) {
-                                let parsed = JSON.parse(savedCooking);
-                                let now = Date.now();
-                                cookingNow = parsed.filter(item => item.finishTime > now); 
+                                cookingNow = JSON.parse(savedCooking).filter(item => item.finishTime > Date.now()); 
                             }
                             
                             let cleanRName = this.cleanName(target.name);
@@ -211,7 +291,6 @@ class CellarModule extends BaseModule {
                                 let targetTimeMin = target.time_min || 60; 
                                 let finishTimeMs = Date.now() + (targetTimeMin * 60000) + 15000; 
                                 cookingNow.push({ name: cleanRName, finishTime: finishTimeMs });
-                                
                                 db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
                                 console.log(`📝 Погреб: Запомнили рецепт -> ${target.name} (Таймер: ${targetTimeMin} мин)`);
                             }
@@ -227,12 +306,12 @@ class CellarModule extends BaseModule {
     }
 
     // ==========================================
-    // ⚙️ ГЛАВНЫЙ ЦИКЛ ПОГРЕБА
+    // ⚙️ ДИСПЕТЧЕР (ЧИСТЫЙ И КРАСИВЫЙ)
     // ==========================================
     static async execute(client, db, workers) {
         try {
             if (!this.isInitialScanDone) {
-                console.log('🔍 Погреб: Первый запуск! Делаем контрольную синхронизацию Книги Рецептов...');
+                console.log('🔍 Погреб: Первый запуск! Делаем контрольную синхронизацию...');
                 let scanner = new RecipeBookScanner(client, db.db, workers.username);
                 await scanner.scan();
                 this.isInitialScanDone = true;
@@ -246,6 +325,10 @@ class CellarModule extends BaseModule {
                 return;
             }
 
+            // 🛡️ ЖЕЛЕЗНАЯ ЗАЩИТА УРОВНЯ
+            // Считываем до начала всех операций, чтобы сканер не перетер данные
+            let currentLevel = db.getProfile().level || 0;
+
             const startUrl = '/mycellar';
             let $ = await client.fetchHtml(startUrl);
             if (!$) return;
@@ -256,109 +339,51 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
             let pageText = $('body').text().toLowerCase();
 
-            let cookingNow = [];
+            // Очистка памяти занятых полок от устаревших таймеров
             try {
                 let savedCooking = db.getAccountSettings('kb_cel_cooking');
                 if (savedCooking) {
                     let parsed = JSON.parse(savedCooking);
-                    let now = Date.now();
-                    cookingNow = parsed.filter(item => item.finishTime > now);
-                    
+                    let cookingNow = parsed.filter(item => item.finishTime > Date.now());
                     if (parsed.length !== cookingNow.length) {
                         db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
                         console.log(`🧹 Погреб: Освободились полки, память просроченных рецептов очищена.`);
                     }
                 }
-            } catch (e) {
-                console.error("🚨 Ошибка парсинга kb_cel_cooking из БД:", e);
-            }
+            } catch (e) {}
 
-            let checkWork = () => {
-                if (allLinks.some(l => l.text.includes('продать всё') || l.text.includes('продать все'))) return true;
-                if (pageText.includes('пустая полка') && allLinks.some(l => l.href.includes('putAllLink') || l.text.includes('заготовить всё') || l.text.includes('выбрать'))) return true;
-                return false;
-            };
+            // РАЗВЕДКА
+            let status = this.analyzeStatus($, pageText, allLinks);
 
-            if (checkWork()) {
-                let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
+            let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
+            if (db.getAccountSettings('use_workers') === 'true' && !isSkillOn && (status.canHarvest || status.emptyShelves > 0)) {
+                console.log(`👩‍🍳 Погреб: Нанимаем Дарью для работы...`);
+                db.saveTimer('kb_cel_timer', Date.now() + 60000);
+                await workers.process(7, 'worker', 'mycellar', 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
+                return;
+            } 
 
-                if (db.getAccountSettings('use_workers') === 'true' && !isSkillOn) {
-                    console.log(`👩‍🍳 Погреб: Нанимаем Дарью для работы...`);
-                    db.saveTimer('kb_cel_timer', Date.now() + 60000);
-                    await workers.process(7, 'worker', 'mycellar', 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-                    return;
-                } 
-                else {
-                    let harvested = await this.harvest(client, db, $, startUrl, allLinks, workers);
-                    if (harvested) {
-                        await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-                        return;
-                    }
-
-                    // --- ЦИКЛ ПОСАДКИ (Пока есть пустые полки) ---
-                    if (pageText.includes('пустая полка')) {
-                        console.log(`🔍 Погреб: Вижу пустые полки! Сканирую Книгу Рецептов перед выбором цели...`);
-                        let scanner = new RecipeBookScanner(client, db.db, workers.username);
-                        await scanner.scan();
-
-                        let maxLoops = 6; // Защита от бесконечного цикла
-                        let loops = 0;
-
-                        while (pageText.includes('пустая полка') && loops < maxLoops) {
-                            loops++;
-                            let fillLink = allLinks.find(l => l.href.includes('putAllLink') || l.text.includes('заготовить всё') || l.text.includes('выбрать'));
-                            
-                            if (!fillLink) break;
-
-                            let currentLevel = db.getProfile().level || 0;
-                            let target = this.chooseTarget(db, currentLevel, cookingNow); 
-                            
-                            if (target.mode === 'WAIT') {
-                                break; // Рецептов для посадки больше нет, выходим из цикла
-                            }
-
-                            let actionUrl = (target.mode === 'UPGRADE' && target.url) ? target.url : this.getAbsoluteUrl(fillLink.href, startUrl);
-                            
-                            let recipe$ = await client.fetchHtml(actionUrl);
-                            if (recipe$) {
-                                await this.cook(client, db, recipe$, actionUrl, target);
-                            }
-                            
-                            // 🔄 ПЕРЕЗАГРУЖАЕМ ПОГРЕБ, ЧТОБЫ УВИДЕТЬ СЛЕДУЮЩУЮ ПУСТУЮ ПОЛКУ (без ретёрнов!)
-                            $ = await client.fetchHtml(startUrl);
-                            if (!$) break;
-                            
-                            $ = await this.openPanel(client, $, startUrl);
-                            allLinks = [];
-                            $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
-                            pageText = $('body').text().toLowerCase();
-
-                            // Обновляем память занятых полок перед следующим кругом
-                            try {
-                                let savedCooking = db.getAccountSettings('kb_cel_cooking');
-                                if (savedCooking) {
-                                    cookingNow = JSON.parse(savedCooking).filter(item => item.finishTime > Date.now());
-                                }
-                            } catch (e) {}
-                        }
-                    }
+            // СБОР
+            if (status.canHarvest) {
+                let harvested = await this.handleHarvest(client, db, startUrl, allLinks);
+                if (harvested) {
+                    await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
+                    return; // Уходим на 3 секунды, вернемся в чистый погреб
                 }
             }
 
-            // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ (Когда цикл полностью закончил забивать полки)
-            await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-
-            // Собираем свежие таймеры с обновленной страницы
-            let minTimeMs = Infinity;
-            let R_TIMERS = /(?:через|осталось)\s+(.{0,30})/gi;
-            let match;
-            while ((match = R_TIMERS.exec(pageText)) !== null) {
-                let ms = this.extractTime(match[1]);
-                if (ms !== null && ms > 0 && ms < minTimeMs) minTimeMs = ms;
+            // КОНВЕЙЕР ПОСАДКИ
+            if (status.emptyShelves > 0) {
+                $ = await this.handlePlanting(client, db, startUrl, status.emptyShelves, currentLevel, workers);
+            } else {
+                $ = await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
             }
 
-            if (minTimeMs === Infinity) minTimeMs = 300000;
-            db.saveTimer('kb_cel_timer', Date.now() + minTimeMs);
+            // ХРОНОМЕТРИСТ
+            if ($) {
+                pageText = $('body').text().toLowerCase();
+                this.updateSleepTimer(db, pageText);
+            }
 
         } catch (e) {
             console.error("🚨 КРИТИЧЕСКАЯ ОШИБКА В ПОГРЕБЕ:", e);
