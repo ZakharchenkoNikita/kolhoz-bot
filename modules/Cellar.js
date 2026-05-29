@@ -76,11 +76,23 @@ class CellarModule extends BaseModule {
         for (let key in recipeBook) {
             if (this.cleanName(key) === cleanDb) {
                 let val = recipeBook[key];
-                if (val === null || Number.isNaN(val) || val === 'NaN') return 'MAX';
-                return parseInt(val, 10);
+                
+                // Защита: если сканер записал Идеальный рецепт текстом
+                if (val === 'MAX' || (typeof val === 'string' && val.toLowerCase().includes('идеал'))) {
+                    return 'MAX';
+                }
+                
+                let parsed = parseInt(val, 10);
+                if (Number.isNaN(parsed)) {
+                    // Легальный ноль: рецепт найден в книге, но прогресс пуст/NaN
+                    return 0;
+                }
+                
+                return parsed;
             }
         }
-        return 0; 
+        // Рецепта физически нет в Книге (заблокирован или еще не открыт)
+        return 'LOCKED'; 
     }
 
     static chooseTarget(db, currentLevel, cookingNow = []) {
@@ -95,6 +107,7 @@ class CellarModule extends BaseModule {
             if (r.req_level > currentLevel) return false; 
             
             let currentM = this.getRecipeMastery(r.name, recipeBook);
+            if (currentM === 'LOCKED') return false; // ⛔ Жесткий фейсконтроль: отсекаем недоступные рецепты
             if (currentM === 'MAX') return false; 
             if (currentM >= r.max_mastery) return false; 
             
