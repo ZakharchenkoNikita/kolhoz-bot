@@ -144,6 +144,9 @@ class CellarModule extends BaseModule {
                     let scanner = new RecipeBookScanner(client, db.db, workers.username);
                     await scanner.scan();
                 }
+                // Очищаем память занятых рецептов, так как всё продано и полки пустые
+                db.saveAccountSettings('kb_cel_cooking', JSON.stringify([]));
+                console.log(`🧹 Погреб: Память активных рецептов очищена после продажи.`);
             }
             db.saveTimer('kb_cel_timer', Date.now() + 3000);
             return true;
@@ -205,6 +208,22 @@ class CellarModule extends BaseModule {
             db.saveTimer('kb_cel_buying', 0); 
             await client.fetchHtml(startUrl);
             console.log(`🍯 Погреб: Банки успешно поставлены!`);
+
+            // Добавляем рецепт в базу данных к текущим готовящимся
+            try {
+                let cookingNow = [];
+                let savedCooking = db.getAccountSettings('kb_cel_cooking');
+                if (savedCooking) cookingNow = JSON.parse(savedCooking);
+                
+                let cleanRName = this.cleanName(target.name);
+                if (!cookingNow.includes(cleanRName)) {
+                    cookingNow.push(cleanRName);
+                    db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
+                    console.log(`📝 Погреб: Запомнили, что готовится рецепт -> ${target.name}`);
+                }
+            } catch (e) {
+                console.error("🚨 Ошибка сохранения kb_cel_cooking в БД:", e);
+            }
         }
     }
 
@@ -232,13 +251,13 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
             let pageText = $('body').text().toLowerCase();
 
-            // 🔍 ПАРСИМ ЗАНЯТЫЕ ПОЛКИ: Берем текст прямо перед таймером (останавливаясь до скобки)
+            // Получаем список занятых рецептов из базы данных (так как на странице они скрыты под "Экспериментальный")
             let cookingNow = [];
-            let R_COOKING = /([^\(]{1,50})\s*\(\s*будет готово через/gi;
-            let cmatch;
-            while ((cmatch = R_COOKING.exec(pageText)) !== null) {
-                let name = this.cleanName(cmatch[1]);
-                if (name && !cookingNow.includes(name)) cookingNow.push(name);
+            try {
+                let savedCooking = db.getAccountSettings('kb_cel_cooking');
+                if (savedCooking) cookingNow = JSON.parse(savedCooking);
+            } catch (e) {
+                console.error("🚨 Ошибка парсинга kb_cel_cooking из БД:", e);
             }
 
             let checkWork = () => {
