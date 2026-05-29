@@ -136,14 +136,12 @@ class CellarModule extends BaseModule {
         if (sellLink) {
             let actionUrl = this.getAbsoluteUrl(sellLink.href, currentUrl);
             let $result = await client.fetchHtml(actionUrl);
+            
+            // Если продажа прошла успешно - ВСЕГДА сканируем Книгу рецептов
             if ($result) {
-                let resultText = $result('body').text();
-                // Ловим табличку получения мастерства по точному тексту
-                if (resultText.includes('кулинарное мастерство увеличено с')) {
-                    console.log(`🆙 Погреб: Получено кулинарное мастерство! Обновляем Книгу Рецептов...`);
-                    let scanner = new RecipeBookScanner(client, db.db, workers.username);
-                    await scanner.scan();
-                }
+                console.log(`🆙 Погреб: Урожай собран! Выполняем синхронизацию Книги Рецептов...`);
+                let scanner = new RecipeBookScanner(client, db.db, workers.username);
+                await scanner.scan();
             }
             db.saveTimer('kb_cel_timer', Date.now() + 3000);
             return true;
@@ -203,33 +201,41 @@ class CellarModule extends BaseModule {
         if (startLink) {
             let startUrl = this.getAbsoluteUrl(startLink.href, currentUrl);
             db.saveTimer('kb_cel_buying', 0); 
-            await client.fetchHtml(startUrl);
-            console.log(`🍯 Погреб: Банки успешно поставлены!`);
-
-            // Умное добавление рецепта с таймером в базу данных
-            try {
-                if (target.name) {
-                    let cookingNow = [];
-                    let savedCooking = db.getAccountSettings('kb_cel_cooking');
-                    if (savedCooking) {
-                        let parsed = JSON.parse(savedCooking);
-                        let now = Date.now();
-                        cookingNow = parsed.filter(item => item.finishTime > now); // Берем только актуальные
-                    }
+            let result$ = await client.fetchHtml(startUrl);
+            
+            // ПРОВЕРКА НА ФАНТОМА: записываем в БД только если игра реально посадила банку
+            if (result$) {
+                let pageText = result$('body').text().toLowerCase();
+                
+                if (pageText.includes('будет готово через') || pageText.includes('осталось')) {
+                    console.log(`🍯 Погреб: Банки успешно поставлены и подтверждены игрой!`);
                     
-                    let cleanRName = this.cleanName(target.name);
-                    // Проверяем, нет ли его уже в списке (по name)
-                    if (!cookingNow.some(item => item.name === cleanRName)) {
-                        let targetTimeMin = target.time_min || 60; // дефолт 60 минут, если вдруг time_min пропал
-                        let finishTimeMs = Date.now() + (targetTimeMin * 60000) + 15000; // +15 секунд запаса
-                        cookingNow.push({ name: cleanRName, finishTime: finishTimeMs });
-                        
-                        db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
-                        console.log(`📝 Погреб: Запомнили рецепт -> ${target.name} (Таймер: ${targetTimeMin} мин)`);
+                    try {
+                        if (target.name) {
+                            let cookingNow = [];
+                            let savedCooking = db.getAccountSettings('kb_cel_cooking');
+                            if (savedCooking) {
+                                let parsed = JSON.parse(savedCooking);
+                                let now = Date.now();
+                                cookingNow = parsed.filter(item => item.finishTime > now); // Берем только актуальные
+                            }
+                            
+                            let cleanRName = this.cleanName(target.name);
+                            if (!cookingNow.some(item => item.name === cleanRName)) {
+                                let targetTimeMin = target.time_min || 60; 
+                                let finishTimeMs = Date.now() + (targetTimeMin * 60000) + 15000; 
+                                cookingNow.push({ name: cleanRName, finishTime: finishTimeMs });
+                                
+                                db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
+                                console.log(`📝 Погреб: Запомнили рецепт -> ${target.name} (Таймер: ${targetTimeMin} мин)`);
+                            }
+                        }
+                    } catch (e) {
+                        console.error("🚨 Ошибка сохранения kb_cel_cooking в БД:", e);
                     }
+                } else {
+                    console.log(`❌ Погреб: Сбой при посадке! (Банка не появилась, защита от фантома включена)`);
                 }
-            } catch (e) {
-                console.error("🚨 Ошибка сохранения kb_cel_cooking в БД:", e);
             }
         }
     }
@@ -239,6 +245,14 @@ class CellarModule extends BaseModule {
     // ==========================================
     static async execute(client, db, workers) {
         try {
+            // КОНТРОЛЬНЫЙ СКАН ПРИ ПЕРВОМ ЗАПУСКЕ БОТА
+            if (!this.isInitialScanDone) {
+                console.log('🔍 Погреб: Первый запуск! Делаем контрольную синхронизацию Книги Рецептов...');
+                let scanner = new RecipeBookScanner(client, db.db, workers.username);
+                await scanner.scan();
+                this.isInitialScanDone = true;
+            }
+
             console.log('🥫 Анализируем Погреб...');
 
             let pauseUntil = db.getTimer('kb_cel_pause') || 0;
