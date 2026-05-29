@@ -66,6 +66,28 @@ class CellarModule extends BaseModule {
     // ==========================================
     // 🧠 ФАЗА ВЫБОРА ЦЕЛИ
     // ==========================================
+    
+    // 🛡️ Умный фильтр для проверки, варится ли уже этот рецепт (игнорирует окончания и порядок слов)
+    static isCooking(dbName, cookingNames) {
+        let clean = (s) => s.toLowerCase().replace(/[^а-яёa-z]/gi, '');
+        let cleanDb = clean(dbName);
+        
+        const getRoots = (str) => str.toLowerCase().replace(/[^а-яёa-z]/gi, ' ').split(/\s+/).filter(w => w.length > 3).map(w => w.substring(0, w.length - 2));
+        let dbRoots = getRoots(dbName);
+
+        for (let cn of cookingNames) {
+            if (cleanDb === clean(cn)) return true; // Точное совпадение без учета пробелов
+            
+            let cnRoots = getRoots(cn);
+            if (dbRoots.length > 0 && cnRoots.length > 0) {
+                // Ищем пересечение корней слов
+                let matches = dbRoots.filter(dr => cnRoots.some(cr => cr.includes(dr) || dr.includes(cr)));
+                if (matches.length >= Math.min(dbRoots.length, cnRoots.length)) return true;
+            }
+        }
+        return false;
+    }
+
     static chooseTarget(db, currentLevel, cookingNow = []) {
         let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
         if (!isSkillOn) return { mode: 'FARM' }; 
@@ -79,7 +101,7 @@ class CellarModule extends BaseModule {
             if (r.req_level > currentLevel) return false; 
             if (recipeBook[r.name] === undefined) return false; 
             if (recipeBook[r.name] >= r.max_mastery) return false; 
-            if (cookingNow.includes(r.name.toLowerCase())) return false; // 🚫 ИСКЛЮЧАЕМ ТО, ЧТО УЖЕ ВАРИТСЯ
+            if (this.isCooking(r.name, cookingNow)) return false; // 🚫 ИСКЛЮЧАЕМ ТО, ЧТО УЖЕ ВАРИТСЯ (умный фильтр)
             return true;
         });
 
@@ -126,7 +148,17 @@ class CellarModule extends BaseModule {
     // ==========================================
     // 🍯 ФАЗА ЗАКЛАДКИ
     // ==========================================
-    static async cook(client, db, $, currentUrl, target) {
+    static async cook(client, db, $, currentUrl, target, workers) {
+        let pageText = $('body').text().toLowerCase();
+
+        // 🛑 ПРОВЕРКА НА ИДЕАЛЬНЫЙ РЕЦЕПТ ДО ЗАКЛАДКИ
+        if (target.mode === 'UPGRADE' && (pageText.includes('идеальный') || pageText.includes('идеальная') || pageText.includes('идеальное'))) {
+            console.log(`✨ Погреб: Стоп! Рецепт "${target.name}" уже идеальный! Обновляем Книгу Рецептов.`);
+            let scanner = new RecipeBookScanner(client, db.db, workers.username);
+            await scanner.scan();
+            return false; // Отменяем варку, чтобы выбрать другую цель
+        }
+
         let allLinks = [];
         $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
 
@@ -137,7 +169,7 @@ class CellarModule extends BaseModule {
                 console.log(`❌ Погреб: Не хватает монет для закупки! Уходим в паузу на 2 часа.`);
                 db.saveTimer('kb_cel_pause', Date.now() + 7200000);
                 db.saveTimer('kb_cel_buying', 0);
-                return;
+                return false;
             }
 
             let bL;
@@ -152,7 +184,7 @@ class CellarModule extends BaseModule {
             let buyUrl = this.getAbsoluteUrl(bL.href, currentUrl);
             db.saveTimer('kb_cel_buying', Date.now() + 15000);
             $ = await client.fetchHtml(buyUrl);
-            if (!$) return;
+            if (!$) return false;
 
             allLinks = [];
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
@@ -164,7 +196,9 @@ class CellarModule extends BaseModule {
             db.saveTimer('kb_cel_buying', 0); 
             await client.fetchHtml(startUrl);
             console.log(`🍯 Погреб: Банки успешно поставлены!`);
+            return true;
         }
+        return false;
     }
 
     // ==========================================
@@ -191,12 +225,11 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
             let pageText = $('body').text().toLowerCase();
 
-            // 🔍 ПАРСИМ РЕЦЕПТЫ, КОТОРЫЕ УЖЕ СТОЯТ НА ПОЛКАХ
+            // 🔍 ПРИЦЕЛЬНО ПАРСИМ РЕЦЕПТЫ, КОТОРЫЕ УЖЕ СТОЯТ НА ПОЛКАХ (из тегов <span class="title">)
             let cookingNow = [];
-            db.db.getAllRecipes().forEach(r => {
-                if (pageText.includes(r.name.toLowerCase())) {
-                    cookingNow.push(r.name.toLowerCase());
-                }
+            $('span.title').each((i, el) => {
+                let name = $(el).text().trim();
+                if (name && !cookingNow.includes(name)) cookingNow.push(name);
             });
 
             let checkWork = () => {
@@ -235,13 +268,19 @@ class CellarModule extends BaseModule {
                             let actionUrl = (target.mode === 'UPGRADE' && target.url) ? target.url : this.getAbsoluteUrl(fillLink.href, startUrl);
                             
                             let recipe$ = await client.fetchHtml(actionUrl);
-                            if (recipe$) await this.cook(client, db, recipe$, actionUrl, target);
-                            
-                            // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ
-                            await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-                            
-                            db.saveTimer('kb_cel_timer', Date.now() + 3000);
-                            return;
+                            if (recipe$) {
+                                let isCooked = await this.cook(client, db, recipe$, actionUrl, target, workers);
+                                
+                                // 🔒 СВОРАЧИВАЕМ ПАНЕЛЬ ПЕРЕД ВЫХОДОМ
+                                await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
+                                
+                                if (isCooked) {
+                                    db.saveTimer('kb_cel_timer', Date.now() + 3000); // Банка поставлена, переходим к следующей
+                                } else {
+                                    db.saveTimer('kb_cel_timer', Date.now() + 1500); // Банка отменена (рецепт идеальный), быстрый рестарт
+                                }
+                                return;
+                            }
                         }
                     }
                 }
