@@ -71,12 +71,14 @@ class CellarModule extends BaseModule {
         return name.toLowerCase().split('(')[0].trim();
     }
 
-    static chooseTarget(db, currentLevel, cookingNow = []) {
+    // ⚡ ДОБАВЛЕН freshRecipeBook ДЛЯ ПРИЕМА СВЕЖИХ ДАННЫХ ИЗ SQLITE
+    static chooseTarget(db, currentLevel, cookingNow = [], freshRecipeBook = null) {
         let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
         if (!isSkillOn) return { mode: 'FARM' }; 
 
         let profile = db.getProfile();
-        let recipeBook = profile.recipe_book || {};
+        // Используем свежую книгу из БД. Если её нет - берем из кэша
+        let recipeBook = freshRecipeBook || profile.recipe_book || {};
         
         // --- РАСПАКОВКА КНИГИ РЕЦЕПТОВ ИЗ СТРОКИ ---
         if (typeof recipeBook === 'string') {
@@ -169,7 +171,6 @@ class CellarModule extends BaseModule {
     static analyzeStatus($, pageText, allLinks) {
         let canHarvest = allLinks.some(l => l.text.includes('продать всё') || l.text.includes('продать все'));
         
-        // Точный подсчет пустых полок по HTML-маркеру
         let emptyShelves = 0;
         if ($) {
             $('span.title').each((i, el) => {
@@ -178,7 +179,6 @@ class CellarModule extends BaseModule {
                 }
             });
         }
-        // Запасной вариант на случай изменений верстки
         if (emptyShelves === 0 && pageText.includes('пустая полка')) {
             let match = pageText.match(/пустая полка/gi);
             if (match) emptyShelves = match.length;
@@ -209,12 +209,44 @@ class CellarModule extends BaseModule {
         let scanner = new RecipeBookScanner(client, db.db, workers.username);
         await scanner.scan();
 
+        // ⚡ ПРЯМОЙ ЗАПРОС В СЕЙФ БД (ОБХОД КЭША) ⚡
+        let freshRecipeBook = null;
+        try {
+            // Сначала пробуем встроенный метод базы, если он есть
+            if (typeof db.db.getAccount === 'function') {
+                let acc = db.db.getAccount(workers.username);
+                if (acc && acc.profile) {
+                    let rawProfile = typeof acc.profile === 'string' ? JSON.parse(acc.profile) : acc.profile;
+                    freshRecipeBook = rawProfile.recipe_book;
+                }
+            }
+            
+            // Если метода нет, бьем жестким SQL-запросом прямо в ядро SQLite (Сейф)
+            if (!freshRecipeBook && db.db && db.db.db) {
+                let row;
+                try { 
+                    row = db.db.db.prepare("SELECT profile FROM accounts WHERE username = ?").get(workers.username); 
+                } catch (err) {
+                    try { 
+                        row = db.db.db.prepare("SELECT profile FROM users WHERE username = ?").get(workers.username); 
+                    } catch (err2) {}
+                }
+                
+                if (row && row.profile) {
+                    let rawProfile = typeof row.profile === 'string' ? JSON.parse(row.profile) : row.profile;
+                    freshRecipeBook = rawProfile.recipe_book;
+                    console.log(`📂 Погреб: Свежая Книга Рецептов успешно выгружена напрямую из SQLite!`);
+                }
+            }
+        } catch (e) {
+            console.error("🚨 Ошибка при прямом чтении Сейфа БД:", e);
+        }
+
         let $ = await client.fetchHtml(startUrl);
         if (!$) return null;
 
         // Жесткий цикл по количеству пустых полок
         for (let i = 0; i < emptyShelvesCount; i++) {
-            // На каждом круге гарантируем, что панель открыта
             $ = await this.openPanel(client, $, startUrl);
             
             let allLinks = [];
@@ -222,10 +254,9 @@ class CellarModule extends BaseModule {
 
             let fillLink = allLinks.find(l => l.href.includes('putAllLink') || l.text.includes('заготовить всё') || l.text.includes('выбрать'));
             if (!fillLink) {
-                break; // Кнопка пропала, выходим из цикла
+                break; 
             }
 
-            // Обновляем память о том, что мы уже посадили на предыдущих кругах
             let cookingNow = [];
             try {
                 let savedCooking = db.getAccountSettings('kb_cel_cooking');
@@ -234,26 +265,25 @@ class CellarModule extends BaseModule {
                 }
             } catch (e) {}
 
-            let target = this.chooseTarget(db, currentLevel, cookingNow);
+            // Передаем свежую книгу в фазу выбора цели
+            let target = this.chooseTarget(db, currentLevel, cookingNow, freshRecipeBook);
             if (target.mode === 'WAIT') {
-                break; // Подходящих рецептов больше нет
+                break; 
             }
 
             let actionUrl = (target.mode === 'UPGRADE' && target.url) ? target.url : this.getAbsoluteUrl(fillLink.href, startUrl);
             let recipe$ = await client.fetchHtml(actionUrl);
             
             if (recipe$) {
-                await this.cook(client, db, recipe$, actionUrl, target); // Сама посадка
+                await this.cook(client, db, recipe$, actionUrl, target); 
             }
 
-            // Скачиваем свежую страницу для следующего круга
             $ = await client.fetchHtml(startUrl);
             if (!$) break;
         }
 
-        // Сворачиваем панель после завершения конвейера
         $ = await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-        return $; // Возвращаем финальную страницу Хронометристу
+        return $; 
     }
 
     // 4. ХРОНОМЕТРИСТ
@@ -364,8 +394,6 @@ class CellarModule extends BaseModule {
                 return;
             }
 
-            // 🛡️ ЖЕЛЕЗНАЯ ЗАЩИТА УРОВНЯ
-            // Считываем до начала всех операций, чтобы сканер не перетер данные
             let currentLevel = db.getProfile().level || 0;
 
             const startUrl = '/mycellar';
@@ -378,7 +406,6 @@ class CellarModule extends BaseModule {
             $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
             let pageText = $('body').text().toLowerCase();
 
-            // Очистка памяти занятых полок от устаревших таймеров
             try {
                 let savedCooking = db.getAccountSettings('kb_cel_cooking');
                 if (savedCooking) {
@@ -391,7 +418,6 @@ class CellarModule extends BaseModule {
                 }
             } catch (e) {}
 
-            // РАЗВЕДКА
             let status = this.analyzeStatus($, pageText, allLinks);
 
             let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
@@ -402,23 +428,20 @@ class CellarModule extends BaseModule {
                 return;
             } 
 
-            // СБОР
             if (status.canHarvest) {
                 let harvested = await this.handleHarvest(client, db, startUrl, allLinks);
                 if (harvested) {
                     await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-                    return; // Уходим на 3 секунды, вернемся в чистый погреб
+                    return; 
                 }
             }
 
-            // КОНВЕЙЕР ПОСАДКИ
             if (status.emptyShelves > 0) {
                 $ = await this.handlePlanting(client, db, startUrl, status.emptyShelves, currentLevel, workers);
             } else {
                 $ = await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
             }
 
-            // ХРОНОМЕТРИСТ
             if ($) {
                 pageText = $('body').text().toLowerCase();
                 this.updateSleepTimer(db, pageText);
