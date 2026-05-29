@@ -73,24 +73,48 @@ class CellarModule extends BaseModule {
 
     static getRecipeMastery(dbName, recipeBook) {
         let cleanDb = this.cleanName(dbName);
-        for (let key in recipeBook) {
-            if (this.cleanName(key) === cleanDb) {
-                let val = recipeBook[key];
-                
-                // Защита: если сканер записал Идеальный рецепт текстом
-                if (val === 'MAX' || (typeof val === 'string' && val.toLowerCase().includes('идеал'))) {
-                    return 'MAX';
+        
+        let checkValue = (val) => {
+            if (val === 'MAX' || (typeof val === 'string' && val.toLowerCase().includes('идеал'))) return 'MAX';
+            let parsed = parseInt(val, 10);
+            return Number.isNaN(parsed) ? 0 : parsed; // 0 — легальный ноль для открытых, но не начатых рецептов
+        };
+
+        // 1. Если база сохранилась как МАССИВ (Список)
+        if (Array.isArray(recipeBook)) {
+            for (let item of recipeBook) {
+                // Если элемент — объект вида {name: "Суп", mastery: 10}
+                if (item && item.name) {
+                    if (this.cleanName(item.name) === cleanDb) {
+                        let val = item.mastery !== undefined ? item.mastery : (item.value !== undefined ? item.value : item.progress);
+                        return checkValue(val);
+                    }
+                } 
+                // Если элемент — массив (кортеж) вида ["Суп", 10]
+                else if (Array.isArray(item) && item.length >= 2) {
+                    if (this.cleanName(item[0]) === cleanDb) {
+                        return checkValue(item[1]);
+                    }
+                } 
+                // Если элемент — объект вида {"Суп": 10}
+                else if (item && typeof item === 'object') {
+                    for (let key in item) {
+                        if (this.cleanName(key) === cleanDb) {
+                            return checkValue(item[key]);
+                        }
+                    }
                 }
-                
-                let parsed = parseInt(val, 10);
-                if (Number.isNaN(parsed)) {
-                    // Легальный ноль: рецепт найден в книге, но прогресс пуст/NaN
-                    return 0;
+            }
+        } 
+        // 2. Если база сохранилась как СЛОВАРЬ (Объект)
+        else if (typeof recipeBook === 'object' && recipeBook !== null) {
+            for (let key in recipeBook) {
+                if (this.cleanName(key) === cleanDb) {
+                    return checkValue(recipeBook[key]);
                 }
-                
-                return parsed;
             }
         }
+
         // Рецепта физически нет в Книге (заблокирован или еще не открыт)
         return 'LOCKED'; 
     }
@@ -119,7 +143,7 @@ class CellarModule extends BaseModule {
             if (r.req_level > currentLevel) return false; 
             
             let currentM = this.getRecipeMastery(r.name, recipeBook);
-            if (currentM === 'LOCKED') return false; // ⛔ Жесткий фейсконтроль: отсекаем недоступные рецепты
+            if (currentM === 'LOCKED') return false; // ⛔ Жесткий фейсконтроль
             if (currentM === 'MAX') return false; 
             if (currentM >= r.max_mastery) return false; 
             
