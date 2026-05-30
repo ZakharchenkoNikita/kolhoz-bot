@@ -1,455 +1,485 @@
-const BaseModule = require('../core/BaseModule');
-const { URL } = require('url');
-const RecipeBookScanner = require('../core/RecipeBookScanner'); 
+const BaseModule        = require('../core/BaseModule');
+const { URL }           = require('url');
+const RecipeBookScanner = require('../core/RecipeBookScanner');
+
+// ─── Константы ────────────────────────────────────────────────────────────────
+
+const BASE_HOST   = 'https://sadovnik.mobi';
+const WORKER_LINK = 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink';
+
+const COOLDOWN = {
+    HARVEST:    3_000,
+    WORKER:    60_000,
+    TICK:      15_000,
+    PAUSE:  7_200_000,  // 2 часа — пауза при нехватке монет
+    DEFAULT:  300_000,  // 5 минут — дефолтный сон
+};
+
+// ─── Модуль ───────────────────────────────────────────────────────────────────
 
 class CellarModule extends BaseModule {
+
+    // ==========================================
+    // 🔧 УТИЛИТЫ
+    // ==========================================
+
     static getAbsoluteUrl(href, baseUrl) {
         if (!href) return null;
         try {
-            let cleanHref = href.replace(/&amp;/g, '&');
-            let base = baseUrl.startsWith('http') ? baseUrl : `https://sadovnik.mobi${baseUrl.startsWith('/') ? '' : '/'}${baseUrl}`;
-            let u = new URL(cleanHref, base);
+            const cleanHref = href.replace(/&amp;/g, '&');
+            const base = baseUrl.startsWith('http')
+                ? baseUrl
+                : `${BASE_HOST}${baseUrl.startsWith('/') ? '' : '/'}${baseUrl}`;
+            const u = new URL(cleanHref, base);
             return u.pathname + u.search;
-        } catch (e) { return href; }
+        } catch {
+            return href;
+        }
     }
 
     static extractTime(timeStr) {
         if (!timeStr) return null;
         let totalMs = 0;
-        let hMatch = timeStr.match(/(\d+)\s*(?:ч|час)/i);
-        let mMatch = timeStr.match(/(\d+)\s*(?:м|мин)/i);
-        let sMatch = timeStr.match(/(\d+)\s*(?:с|сек)/i);
-        if (hMatch) totalMs += parseInt(hMatch[1], 10) * 3600000;
-        if (mMatch) totalMs += parseInt(mMatch[1], 10) * 60000;
-        if (sMatch) totalMs += parseInt(sMatch[1], 10) * 1000;
+        const hMatch = timeStr.match(/(\d+)\s*(?:ч|час)/i);
+        const mMatch = timeStr.match(/(\d+)\s*(?:м|мин)/i);
+        const sMatch = timeStr.match(/(\d+)\s*(?:с|сек)/i);
+        if (hMatch) totalMs += parseInt(hMatch[1], 10) * 3_600_000;
+        if (mMatch) totalMs += parseInt(mMatch[1], 10) *    60_000;
+        if (sMatch) totalMs += parseInt(sMatch[1], 10) *     1_000;
         return totalMs > 0 ? totalMs : null;
     }
 
+    static cleanName(name) {
+        return name.toLowerCase().split('(')[0].trim();
+    }
+
+    /** Собирает все ссылки страницы в единый массив { href, text }. */
+    static _collectLinks($) {
+        const links = [];
+        $('a').each((_, el) => links.push({
+            href: $(el).attr('href') || '',
+            text: $(el).text().toLowerCase().trim(),
+        }));
+        return links;
+    }
+
     // ==========================================
-    // 👁️ МЕТОДЫ УПРАВЛЕНИЯ ПАНЕЛЬЮ
+    // 👁️ УПРАВЛЕНИЕ ПАНЕЛЬЮ
     // ==========================================
+
     static async openPanel(client, $, currentUrl) {
         if (!$) return null;
-        let openLink = $('a').filter((i, el) => ($(el).attr('href') || '').includes('BonusPanel-openLink')).first().attr('href');
-        
-        if (openLink) {
-            let actionUrl = this.getAbsoluteUrl(openLink, currentUrl);
-            let newPage = await client.fetchHtml(actionUrl);
-            return newPage ? newPage : $; 
+        const href = $('a')
+            .filter((_, el) => ($(el).attr('href') || '').includes('BonusPanel-openLink'))
+            .first().attr('href');
+        if (href) {
+            const page = await client.fetchHtml(this.getAbsoluteUrl(href, currentUrl));
+            return page ?? $;
         }
         return $;
     }
 
     static async hidePanel(client, $, currentUrl, fireUrlPattern = null) {
         if (!$) return null;
-        let hideLink = $('a').filter((i, el) => ($(el).attr('href') || '').includes('BonusPanel-hideLink')).first().attr('href');
-        let finalHideUrl = null;
+        const hideHref = $('a')
+            .filter((_, el) => ($(el).attr('href') || '').includes('BonusPanel-hideLink'))
+            .first().attr('href');
 
-        if (hideLink) {
-            finalHideUrl = this.getAbsoluteUrl(hideLink, currentUrl);
-        } else if (fireUrlPattern) {
-            let html = $.html();
-            let vMatch = html.match(/\?(\d+)-/);
+        let finalUrl = hideHref ? this.getAbsoluteUrl(hideHref, currentUrl) : null;
+
+        if (!finalUrl && fireUrlPattern) {
+            const vMatch = $.html().match(/\?(\d+)-/);
             if (vMatch) {
-                let formattedFire = fireUrlPattern.replace('?-1', `?${vMatch[1]}`).replace('fireWorkerLink', 'hideLink');
-                finalHideUrl = this.getAbsoluteUrl(`/${formattedFire}`, currentUrl);
+                const fire = fireUrlPattern
+                    .replace('?-1', `?${vMatch[1]}`)
+                    .replace('fireWorkerLink', 'hideLink');
+                finalUrl = this.getAbsoluteUrl(`/${fire}`, currentUrl);
             }
         }
 
-        if (finalHideUrl) {
-            let newPage = await client.fetchHtml(finalHideUrl);
-            return newPage ? newPage : $;
+        if (finalUrl) {
+            const page = await client.fetchHtml(finalUrl);
+            return page ?? $;
         }
         return $;
     }
 
     // ==========================================
-    // 🧠 ФАЗА ВЫБОРА ЦЕЛИ И СВЕРКА С БАЗОЙ
+    // 💾 РАБОТА С БАЗОЙ ДАННЫХ
     // ==========================================
-    
-    static cleanName(name) {
-        return name.toLowerCase().split('(')[0].trim();
+
+    /**
+     * Читает свежую Книгу Рецептов, обходя кэш.
+     * Цепочка: метод модели → прямой SQL по таблицам accounts/users.
+     */
+    static _readFreshRecipeBook(db, username) {
+        if (typeof db.db.getAccount === 'function') {
+            const acc = db.db.getAccount(username);
+            if (acc?.profile) {
+                const p = typeof acc.profile === 'string' ? JSON.parse(acc.profile) : acc.profile;
+                if (p.recipe_book) return p.recipe_book;
+            }
+        }
+
+        for (const table of ['accounts', 'users']) {
+            try {
+                const row = db.db.db
+                    .prepare(`SELECT profile FROM ${table} WHERE username = ?`)
+                    .get(username);
+                if (row?.profile) {
+                    const p = typeof row.profile === 'string' ? JSON.parse(row.profile) : row.profile;
+                    if (p.recipe_book) {
+                        console.log(`📂 Погреб: Книга рецептов из SQLite (${table})`);
+                        return p.recipe_book;
+                    }
+                }
+            } catch { /* таблица не найдена — пробуем следующую */ }
+        }
+        return null;
     }
 
-    // ⚡ ДОБАВЛЕН freshRecipeBook ДЛЯ ПРИЕМА СВЕЖИХ ДАННЫХ ИЗ SQLITE
-    static chooseTarget(db, currentLevel, cookingNow = [], freshRecipeBook = null) {
-        let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
-        if (!isSkillOn) return { mode: 'FARM' }; 
+    /**
+     * Возвращает активные (не просроченные) записи о готовке.
+     * Побочный эффект: очищает устаревшие записи из настроек.
+     */
+    static _getActiveCooking(db) {
+        try {
+            const saved = db.getAccountSettings('kb_cel_cooking');
+            if (!saved) return [];
+            const all    = JSON.parse(saved);
+            const active = all.filter(item => item.finishTime > Date.now());
+            if (active.length < all.length) {
+                db.saveAccountSettings('kb_cel_cooking', JSON.stringify(active));
+                console.log(`🧹 Погреб: Просроченные записи о готовке очищены.`);
+            }
+            return active;
+        } catch {
+            return [];
+        }
+    }
 
-        let profile = db.getProfile();
-        // Используем свежую книгу из БД. Если её нет - берем из кэша
-        let recipeBook = freshRecipeBook || profile.recipe_book || {};
-        
-        // --- РАСПАКОВКА КНИГИ РЕЦЕПТОВ ИЗ СТРОКИ ---
+    /** Сохраняет запись о поставленном рецепте. */
+    static _rememberCooking(db, target) {
+        if (!target.name) return;
+        try {
+            const cookingNow  = this._getActiveCooking(db);
+            const cleanRName  = this.cleanName(target.name);
+            if (cookingNow.some(item => item.name === cleanRName)) return;
+
+            const timeMin = target.time_min || 60;
+            cookingNow.push({
+                name:       cleanRName,
+                finishTime: Date.now() + timeMin * 60_000 + 15_000,
+            });
+            db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
+            console.log(`📝 Погреб: Запомнили -> ${target.name} (${timeMin} мин)`);
+        } catch (e) {
+            console.error('🚨 Ошибка сохранения kb_cel_cooking:', e);
+        }
+    }
+
+    // ==========================================
+    // 🧠 ВЫБОР ЦЕЛИ
+    // ==========================================
+
+    static chooseTarget(db, currentLevel, cookingNow = [], freshRecipeBook = null) {
+        if (db.getAccountSettings('culinary_skill') !== 'true') return { mode: 'FARM' };
+
+        const profile    = db.getProfile();
+        let   recipeBook = freshRecipeBook ?? profile.recipe_book ?? {};
+
         if (typeof recipeBook === 'string') {
-            try {
-                recipeBook = JSON.parse(recipeBook);
-            } catch (e) {
-                console.error("🚨 Ошибка распаковки Книги Рецептов:", e);
+            try { recipeBook = JSON.parse(recipeBook); }
+            catch (e) {
+                console.error('🚨 Ошибка распаковки Книги Рецептов:', e);
                 recipeBook = {};
             }
         }
 
-        // ШАГ 1: ФОРМИРУЕМ "БЕЛЫЙ СПИСОК" (Из личной Книги Рецептов)
-        let myWhiteList = [];
-        let checkValue = (val) => {
-            if (val === 'MAX' || (typeof val === 'string' && val.toLowerCase().includes('идеал'))) return 'MAX';
-            let parsed = parseInt(val, 10);
-            return Number.isNaN(parsed) ? 0 : parsed;
-        };
-
-        if (Array.isArray(recipeBook)) {
-            for (let item of recipeBook) {
-                if (item && item.name) {
-                    let val = item.mastery !== undefined ? item.mastery : (item.value !== undefined ? item.value : item.progress);
-                    myWhiteList.push({ name: this.cleanName(item.name), mastery: checkValue(val) });
-                } else if (Array.isArray(item) && item.length >= 2) {
-                    myWhiteList.push({ name: this.cleanName(item[0]), mastery: checkValue(item[1]) });
-                } else if (item && typeof item === 'object') {
-                    for (let key in item) {
-                        myWhiteList.push({ name: this.cleanName(key), mastery: checkValue(item[key]) });
-                    }
-                }
-            }
-        } else if (typeof recipeBook === 'object' && recipeBook !== null) {
-            for (let key in recipeBook) {
-                myWhiteList.push({ name: this.cleanName(key), mastery: checkValue(recipeBook[key]) });
-            }
-        }
-
-        // ШАГ 2: ИЩЕМ РЕЦЕПТЫ В ГЛОБАЛЬНОЙ БАЗЕ И ФИЛЬТРУЕМ
-        let allRecipes = db.db.getAllRecipes(); 
-        let candidates = [];
-
-        for (let myRecipe of myWhiteList) {
-            // Проверка на Идеал
-            if (myRecipe.mastery === 'MAX') continue;
-
-            // Проверка дубликатов на полках
-            let isCooking = cookingNow.some(cn => cn.name && cn.name === myRecipe.name);
-            if (isCooking) continue;
-
-            // Обогащение из глобальной базы
-            let globalData = allRecipes.find(r => this.cleanName(r.name) === myRecipe.name);
-            if (!globalData) continue; // Если глобальная база не знает рецепт — пропускаем
-
-            // Проверка уровня персонажа
-            if (globalData.req_level > currentLevel) continue;
-            
-            // Проверка лимита мастерства для текущего уровня
-            if (myRecipe.mastery >= globalData.max_mastery) continue;
-
-            // Рецепт прошел все фильтры, добавляем в список кандидатов!
-            candidates.push({
-                ...globalData,
-                current_mastery: myRecipe.mastery
-            });
-        }
+        const whitelist  = this._buildWhiteList(recipeBook);
+        const candidates = this._filterCandidates(db, whitelist, currentLevel, cookingNow);
 
         if (candidates.length === 0) {
             console.log('⏳ Погреб: Все доступные рецепты прокачаны или заняты!');
             return { mode: 'WAIT' };
         }
 
-        // ШАГ 3: СОРТИРОВКА (От самых высокоуровневых к простым)
+        // Сортировка: высокоуровневые → простые
         candidates.sort((a, b) => b.req_level - a.req_level);
-        let target = candidates[0];
+        const target = candidates[0];
 
-        let ings = Array.isArray(target.ingredients) ? target.ingredients.join('/') : target.ingredients;
-        let url = `/recipe/${target.id}/${ings}/${target.time_min}/${target.hash}`;
-        
+        const ings = Array.isArray(target.ingredients)
+            ? target.ingredients.join('/')
+            : target.ingredients;
+        const url = `/recipe/${target.id}/${ings}/${target.time_min}/${target.hash}`;
+
         console.log(`🎯 Погреб: Цель -> ${target.name} (Мастерство: ${target.current_mastery}/${target.max_mastery})`);
-        
-        return { mode: 'UPGRADE', url: url, name: target.name };
+        return { mode: 'UPGRADE', url, name: target.name, time_min: target.time_min };
+    }
+
+    /** Нормализует Книгу Рецептов в единый формат [{ name, mastery }]. */
+    static _buildWhiteList(recipeBook) {
+        const checkValue = (val) => {
+            if (val === 'MAX' || (typeof val === 'string' && /Идеальный/i.test(val))) return 'MAX';
+            const parsed = parseInt(val, 10);
+            return Number.isNaN(parsed) ? 0 : parsed;
+        };
+
+        if (Array.isArray(recipeBook)) {
+            return recipeBook.flatMap(item => {
+                if (!item) return [];
+                if (item.name) {
+                    const val = item.mastery ?? item.value ?? item.progress;
+                    return [{ name: this.cleanName(item.name), mastery: checkValue(val) }];
+                }
+                if (Array.isArray(item) && item.length >= 2) {
+                    return [{ name: this.cleanName(item[0]), mastery: checkValue(item[1]) }];
+                }
+                if (typeof item === 'object') {
+                    return Object.entries(item).map(([k, v]) => ({
+                        name:    this.cleanName(k),
+                        mastery: checkValue(v),
+                    }));
+                }
+                return [];
+            });
+        }
+
+        if (typeof recipeBook === 'object' && recipeBook !== null) {
+            return Object.entries(recipeBook).map(([k, v]) => ({
+                name:    this.cleanName(k),
+                mastery: checkValue(v),
+            }));
+        }
+
+        return [];
+    }
+
+    /** Фильтрует кандидатов по уровню персонажа, мастерству и дублям на полках. */
+    static _filterCandidates(db, whitelist, currentLevel, cookingNow) {
+        const allRecipes = db.db.getAllRecipes();
+
+        return whitelist.reduce((acc, myRecipe) => {
+            if (myRecipe.mastery === 'MAX') return acc;
+            if (cookingNow.some(cn => cn.name === myRecipe.name)) return acc;
+
+            const globalData = allRecipes.find(r => this.cleanName(r.name) === myRecipe.name);
+            if (!globalData)                                 return acc;
+            if (globalData.req_level > currentLevel)         return acc;
+            if (myRecipe.mastery >= globalData.max_mastery)  return acc;
+
+            acc.push({ ...globalData, current_mastery: myRecipe.mastery });
+            return acc;
+        }, []);
     }
 
     // ==========================================
-    // 🚜 ВНУТРЕННИЕ ИНСТРУМЕНТЫ (НОВАЯ АРХИТЕКТУРА)
+    // 🔍 АНАЛИЗ СТАТУСА
     // ==========================================
-    
-    // 1. РАЗВЕДЧИК
+
     static analyzeStatus($, pageText, allLinks) {
-        let canHarvest = allLinks.some(l => l.text.includes('продать всё') || l.text.includes('продать все'));
-        
+        const canHarvest = allLinks.some(l =>
+            l.text.includes('продать всё') || l.text.includes('продать все')
+        );
+
         let emptyShelves = 0;
         if ($) {
-            $('span.title').each((i, el) => {
-                if ($(el).text().toLowerCase().includes('пустая полка')) {
-                    emptyShelves++;
-                }
+            $('span.title').each((_, el) => {
+                if ($(el).text().toLowerCase().includes('пустая полка')) emptyShelves++;
             });
         }
+        // Фолбэк через regex, если span.title не отработал
         if (emptyShelves === 0 && pageText.includes('пустая полка')) {
-            let match = pageText.match(/пустая полка/gi);
-            if (match) emptyShelves = match.length;
+            emptyShelves = (pageText.match(/пустая полка/gi) || []).length;
         }
 
         return { canHarvest, emptyShelves };
     }
 
-    // 2. СБОРЩИК
+    // ==========================================
+    // 🍯 ДЕЙСТВИЯ
+    // ==========================================
+
+    /** Продаёт готовый урожай. */
     static async handleHarvest(client, db, currentUrl, allLinks) {
-        let sellLink = allLinks.find(l => l.text.includes('продать всё') || l.text.includes('продать все'));
-        if (sellLink) {
-            let actionUrl = this.getAbsoluteUrl(sellLink.href, currentUrl);
-            let $result = await client.fetchHtml(actionUrl);
-            
-            if ($result) {
-                console.log(`🆙 Погреб: Урожай собран!`);
-            }
-            db.saveTimer('kb_cel_timer', Date.now() + 3000);
-            return true;
-        }
-        return false;
+        const sellLink = allLinks.find(l =>
+            l.text.includes('продать всё') || l.text.includes('продать все')
+        );
+        if (!sellLink) return false;
+
+        await client.fetchHtml(this.getAbsoluteUrl(sellLink.href, currentUrl));
+        console.log(`🆙 Погреб: Урожай собран!`);
+        db.saveTimer('kb_cel_timer', Date.now() + COOLDOWN.HARVEST);
+        return true;
     }
 
-    // 3. КОНВЕЙЕР ПОСАДКИ
+    /** Конвейер посадки: сканирует книгу, заполняет пустые полки. */
     static async handlePlanting(client, db, startUrl, emptyShelvesCount, currentLevel, workers) {
-        console.log(`🔍 Погреб: Вижу ${emptyShelvesCount} пустых полок! Сканируем Книгу Рецептов перед конвейером...`);
-        let scanner = new RecipeBookScanner(client, db.db, workers.username);
-        await scanner.scan();
+        console.log(`🔍 Погреб: ${emptyShelvesCount} пустых полок. Сканируем Книгу Рецептов...`);
+        await new RecipeBookScanner(client, db.db, workers.username).scan();
 
-        // ⚡ ПРЯМОЙ ЗАПРОС В СЕЙФ БД (ОБХОД КЭША) ⚡
-        let freshRecipeBook = null;
-        try {
-            // Сначала пробуем встроенный метод базы, если он есть
-            if (typeof db.db.getAccount === 'function') {
-                let acc = db.db.getAccount(workers.username);
-                if (acc && acc.profile) {
-                    let rawProfile = typeof acc.profile === 'string' ? JSON.parse(acc.profile) : acc.profile;
-                    freshRecipeBook = rawProfile.recipe_book;
-                }
-            }
-            
-            // Если метода нет, бьем жестким SQL-запросом прямо в ядро SQLite (Сейф)
-            if (!freshRecipeBook && db.db && db.db.db) {
-                let row;
-                try { 
-                    row = db.db.db.prepare("SELECT profile FROM accounts WHERE username = ?").get(workers.username); 
-                } catch (err) {
-                    try { 
-                        row = db.db.db.prepare("SELECT profile FROM users WHERE username = ?").get(workers.username); 
-                    } catch (err2) {}
-                }
-                
-                if (row && row.profile) {
-                    let rawProfile = typeof row.profile === 'string' ? JSON.parse(row.profile) : row.profile;
-                    freshRecipeBook = rawProfile.recipe_book;
-                    console.log(`📂 Погреб: Свежая Книга Рецептов успешно выгружена напрямую из SQLite!`);
-                }
-            }
-        } catch (e) {
-            console.error("🚨 Ошибка при прямом чтении Сейфа БД:", e);
-        }
+        const freshRecipeBook = this._readFreshRecipeBook(db, workers.username);
 
         let $ = await client.fetchHtml(startUrl);
         if (!$) return null;
 
-        // Жесткий цикл по количеству пустых полок
         for (let i = 0; i < emptyShelvesCount; i++) {
             $ = await this.openPanel(client, $, startUrl);
-            
-            let allLinks = [];
-            $('a').each((idx, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
 
-            let fillLink = allLinks.find(l => l.href.includes('putAllLink') || l.text.includes('заготовить всё') || l.text.includes('выбрать'));
-            if (!fillLink) {
-                break; 
-            }
+            const allLinks = this._collectLinks($);
+            const fillLink = allLinks.find(l =>
+                l.href.includes('putAllLink') ||
+                l.text.includes('заготовить всё') ||
+                l.text.includes('выбрать')
+            );
+            if (!fillLink) break;
 
-            let cookingNow = [];
-            try {
-                let savedCooking = db.getAccountSettings('kb_cel_cooking');
-                if (savedCooking) {
-                    cookingNow = JSON.parse(savedCooking).filter(item => item.finishTime > Date.now());
-                }
-            } catch (e) {}
+            const cookingNow = this._getActiveCooking(db);
+            const target     = this.chooseTarget(db, currentLevel, cookingNow, freshRecipeBook);
+            if (target.mode === 'WAIT') break;
 
-            // Передаем свежую книгу в фазу выбора цели
-            let target = this.chooseTarget(db, currentLevel, cookingNow, freshRecipeBook);
-            if (target.mode === 'WAIT') {
-                break; 
-            }
+            const actionUrl = (target.mode === 'UPGRADE' && target.url)
+                ? target.url
+                : this.getAbsoluteUrl(fillLink.href, startUrl);
 
-            let actionUrl = (target.mode === 'UPGRADE' && target.url) ? target.url : this.getAbsoluteUrl(fillLink.href, startUrl);
-            let recipe$ = await client.fetchHtml(actionUrl);
-            
-            if (recipe$) {
-                await this.cook(client, db, recipe$, actionUrl, target); 
-            }
+            const recipe$ = await client.fetchHtml(actionUrl);
+            if (recipe$) await this.cook(client, db, recipe$, actionUrl, target);
 
             $ = await client.fetchHtml(startUrl);
             if (!$) break;
         }
 
-        $ = await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-        return $; 
+        return this.hidePanel(client, $, startUrl, WORKER_LINK);
     }
 
-    // 4. ХРОНОМЕТРИСТ
-    static updateSleepTimer(db, pageText) {
-        let minTimeMs = Infinity;
-        let R_TIMERS = /(?:через|осталось)\s+(.{0,30})/gi;
-        let match;
-        while ((match = R_TIMERS.exec(pageText)) !== null) {
-            let ms = this.extractTime(match[1]);
-            if (ms !== null && ms > 0 && ms < minTimeMs) minTimeMs = ms;
-        }
-
-        if (minTimeMs === Infinity) minTimeMs = 300000;
-        db.saveTimer('kb_cel_timer', Date.now() + minTimeMs);
-    }
-
-    // ==========================================
-    // 🍯 МЕТОД ФИЗИЧЕСКОЙ ПОСАДКИ (COOK)
-    // ==========================================
+    /** Физически ставит банки на полку. */
     static async cook(client, db, $, currentUrl, target) {
-        let allLinks = [];
-        $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
+        let allLinks = this._collectLinks($);
 
-        let buyLinks = allLinks.filter(l => l.text.includes('докупить состав на'));
+        // Закупка ингредиентов (если нужна)
+        const buyLinks = allLinks.filter(l => l.text.includes('докупить состав на'));
         if (buyLinks.length > 0) {
-            let buyingTimer = db.getTimer('kb_cel_buying') || 0;
+            const buyingTimer = db.getTimer('kb_cel_buying') || 0;
             if (Date.now() < buyingTimer) {
-                console.log(`❌ Погреб: Не хватает монет для закупки! Уходим в паузу на 2 часа.`);
-                db.saveTimer('kb_cel_pause', Date.now() + 7200000);
+                console.log(`❌ Погреб: Не хватает монет! Пауза на 2 часа.`);
+                db.saveTimer('kb_cel_pause',  Date.now() + COOLDOWN.PAUSE);
                 db.saveTimer('kb_cel_buying', 0);
                 return;
             }
 
-            let bL = (target.mode === 'UPGRADE') ? buyLinks[0] : buyLinks[buyLinks.length - 1]; 
-            console.log(target.mode === 'UPGRADE' ? `🛒 Погреб: Закупаем на 1 порцию (Прокачка)` : `🛒 Погреб: Закупаем на все полки (Фарм)`);
+            const bL = target.mode === 'UPGRADE' ? buyLinks[0] : buyLinks[buyLinks.length - 1];
+            console.log(target.mode === 'UPGRADE'
+                ? `🛒 Погреб: Закупаем 1 порцию (Прокачка)`
+                : `🛒 Погреб: Закупаем все полки (Фарм)`);
 
-            let buyUrl = this.getAbsoluteUrl(bL.href, currentUrl);
-            db.saveTimer('kb_cel_buying', Date.now() + 15000);
-            $ = await client.fetchHtml(buyUrl);
+            db.saveTimer('kb_cel_buying', Date.now() + COOLDOWN.TICK);
+            $ = await client.fetchHtml(this.getAbsoluteUrl(bL.href, currentUrl));
             if (!$) return;
-
-            allLinks = [];
-            $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
+            allLinks = this._collectLinks($);
         }
 
-        let startLink;
-        if (target.mode === 'UPGRADE') {
-            startLink = allLinks.find(l => l.text === 'поставить' || (l.href.includes('putLink') && !l.href.includes('putAllLink')));
+        // Выбор кнопки посадки
+        const startLink = target.mode === 'UPGRADE'
+            ? allLinks.find(l => l.text === 'поставить' || (l.href.includes('putLink') && !l.href.includes('putAllLink')))
+            : (allLinks.find(l => l.text.includes('заготовить всё') || l.href.includes('putAllLink'))
+               ?? allLinks.find(l => l.text === 'поставить' || l.href.includes('putLink')));
+
+        if (!startLink) return;
+
+        db.saveTimer('kb_cel_buying', 0);
+        const result$ = await client.fetchHtml(this.getAbsoluteUrl(startLink.href, currentUrl));
+        if (!result$) return;
+
+        const pageText = result$('body').text().toLowerCase();
+        if (pageText.includes('будет готово через') || pageText.includes('осталось')) {
+            console.log(`🍯 Погреб: Банки успешно поставлены!`);
+            this._rememberCooking(db, target);
         } else {
-            startLink = allLinks.find(l => l.text.includes('заготовить всё') || l.href.includes('putAllLink'));
-            if (!startLink) startLink = allLinks.find(l => l.text === 'поставить' || l.href.includes('putLink'));
-        }
-
-        if (startLink) {
-            let startUrl = this.getAbsoluteUrl(startLink.href, currentUrl);
-            db.saveTimer('kb_cel_buying', 0); 
-            let result$ = await client.fetchHtml(startUrl);
-            
-            if (result$) {
-                let pageText = result$('body').text().toLowerCase();
-                if (pageText.includes('будет готово через') || pageText.includes('осталось')) {
-                    console.log(`🍯 Погреб: Банки успешно поставлены и подтверждены игрой!`);
-                    
-                    try {
-                        if (target.name) {
-                            let cookingNow = [];
-                            let savedCooking = db.getAccountSettings('kb_cel_cooking');
-                            if (savedCooking) {
-                                cookingNow = JSON.parse(savedCooking).filter(item => item.finishTime > Date.now()); 
-                            }
-                            
-                            let cleanRName = this.cleanName(target.name);
-                            if (!cookingNow.some(item => item.name === cleanRName)) {
-                                let targetTimeMin = target.time_min || 60; 
-                                let finishTimeMs = Date.now() + (targetTimeMin * 60000) + 15000; 
-                                cookingNow.push({ name: cleanRName, finishTime: finishTimeMs });
-                                db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
-                                console.log(`📝 Погреб: Запомнили рецепт -> ${target.name} (Таймер: ${targetTimeMin} мин)`);
-                            }
-                        }
-                    } catch (e) {
-                        console.error("🚨 Ошибка сохранения kb_cel_cooking в БД:", e);
-                    }
-                } else {
-                    console.log(`❌ Погреб: Сбой при посадке! (Банка не появилась)`);
-                }
-            }
+            console.log(`❌ Погреб: Сбой при посадке! (Банка не появилась)`);
         }
     }
 
     // ==========================================
-    // ⚙️ ДИСПЕТЧЕР (ЧИСТЫЙ И КРАСИВЫЙ)
+    // ⏱️ ТАЙМЕР
     // ==========================================
+
+    static updateSleepTimer(db, pageText) {
+        const regex = /(?:через|осталось)\s+(.{0,30})/gi;
+        let minTimeMs = Infinity;
+        let match;
+        while ((match = regex.exec(pageText)) !== null) {
+            const ms = this.extractTime(match[1]);
+            if (ms !== null && ms > 0 && ms < minTimeMs) minTimeMs = ms;
+        }
+        db.saveTimer('kb_cel_timer', Date.now() + (isFinite(minTimeMs) ? minTimeMs : COOLDOWN.DEFAULT));
+    }
+
+    // ==========================================
+    // ⚙️ ДИСПЕТЧЕР
+    // ==========================================
+
     static async execute(client, db, workers) {
         try {
             if (!this.isInitialScanDone) {
-                console.log('🔍 Погреб: Первый запуск! Делаем контрольную синхронизацию...');
-                let scanner = new RecipeBookScanner(client, db.db, workers.username);
-                await scanner.scan();
+                console.log('🔍 Погреб: Первый запуск! Синхронизируем Книгу Рецептов...');
+                await new RecipeBookScanner(client, db.db, workers.username).scan();
                 this.isInitialScanDone = true;
             }
 
             console.log('🥫 Анализируем Погреб...');
 
-            let pauseUntil = db.getTimer('kb_cel_pause') || 0;
+            const pauseUntil = db.getTimer('kb_cel_pause') || 0;
             if (Date.now() < pauseUntil) {
-                db.saveTimer('kb_cel_timer', Date.now() + 300000); 
+                db.saveTimer('kb_cel_timer', Date.now() + COOLDOWN.DEFAULT);
                 return;
             }
 
-            let currentLevel = db.getProfile().level || 0;
-
-            const startUrl = '/mycellar';
-            let $ = await client.fetchHtml(startUrl);
+            const currentLevel = db.getProfile().level || 0;
+            const startUrl     = '/mycellar';
+            let   $ = await client.fetchHtml(startUrl);
             if (!$) return;
 
             $ = await this.openPanel(client, $, startUrl);
 
-            let allLinks = [];
-            $('a').each((i, el) => { allLinks.push({ href: $(el).attr('href') || '', text: $(el).text().toLowerCase().trim() }); });
-            let pageText = $('body').text().toLowerCase();
+            const allLinks  = this._collectLinks($);
+            const pageText  = $('body').text().toLowerCase();
+            const isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
+            const status    = this.analyzeStatus($, pageText, allLinks);
 
-            try {
-                let savedCooking = db.getAccountSettings('kb_cel_cooking');
-                if (savedCooking) {
-                    let parsed = JSON.parse(savedCooking);
-                    let cookingNow = parsed.filter(item => item.finishTime > Date.now());
-                    if (parsed.length !== cookingNow.length) {
-                        db.saveAccountSettings('kb_cel_cooking', JSON.stringify(cookingNow));
-                        console.log(`🧹 Погреб: Освободились полки, память просроченных рецептов очищена.`);
-                    }
-                }
-            } catch (e) {}
+            // Очистка просроченных записей о готовке (побочный эффект)
+            this._getActiveCooking(db);
 
-            let status = this.analyzeStatus($, pageText, allLinks);
-
-            let isSkillOn = db.getAccountSettings('culinary_skill') === 'true';
-            if (db.getAccountSettings('use_workers') === 'true' && !isSkillOn && (status.canHarvest || status.emptyShelves > 0)) {
-                console.log(`👩‍🍳 Погреб: Нанимаем Дарью для работы...`);
-                db.saveTimer('kb_cel_timer', Date.now() + 60000);
-                await workers.process(7, 'worker', 'mycellar', 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
+            // Режим работника Дарьи (только при выключенном навыке прокачки)
+            if (db.getAccountSettings('use_workers') === 'true' &&
+                !isSkillOn &&
+                (status.canHarvest || status.emptyShelves > 0)) {
+                console.log(`👩‍🍳 Погреб: Нанимаем Дарью...`);
+                db.saveTimer('kb_cel_timer', Date.now() + COOLDOWN.WORKER);
+                await workers.process(7, 'worker', 'mycellar', WORKER_LINK);
                 return;
-            } 
+            }
 
             if (status.canHarvest) {
-                let harvested = await this.handleHarvest(client, db, startUrl, allLinks);
+                const harvested = await this.handleHarvest(client, db, startUrl, allLinks);
                 if (harvested) {
-                    await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
-                    return; 
+                    await this.hidePanel(client, $, startUrl, WORKER_LINK);
+                    return;
                 }
             }
 
             if (status.emptyShelves > 0) {
                 $ = await this.handlePlanting(client, db, startUrl, status.emptyShelves, currentLevel, workers);
             } else {
-                $ = await this.hidePanel(client, $, startUrl, 'mycellar?-1.ILinkListener-cellarBonusPanel-fireWorkerLink');
+                $ = await this.hidePanel(client, $, startUrl, WORKER_LINK);
             }
 
             if ($) {
-                pageText = $('body').text().toLowerCase();
-                this.updateSleepTimer(db, pageText);
+                this.updateSleepTimer(db, $('body').text().toLowerCase());
             }
 
         } catch (e) {
-            console.error("🚨 КРИТИЧЕСКАЯ ОШИБКА В ПОГРЕБЕ:", e);
-            db.saveTimer('kb_cel_timer', Date.now() + 60000); 
+            console.error('🚨 КРИТИЧЕСКАЯ ОШИБКА В ПОГРЕБЕ:', e);
+            db.saveTimer('kb_cel_timer', Date.now() + COOLDOWN.DEFAULT);
         }
     }
 }
