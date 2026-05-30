@@ -257,21 +257,37 @@ class CellarModule extends BaseModule {
 
     /** Фильтрует кандидатов по уровню персонажа, мастерству и дублям на полках. */
     static _filterCandidates(db, whitelist, currentLevel, cookingNow) {
-        const allRecipes = db.db.getAllRecipes();
+    const allRecipes = db.db.getAllRecipes();
+    console.log(`📦 Глобальная база: ${allRecipes.length} рецептов. Уровень персонажа: ${currentLevel}`);
 
-        return whitelist.reduce((acc, myRecipe) => {
-            if (myRecipe.mastery === 'MAX') return acc;
-            if (cookingNow.some(cn => cn.name === myRecipe.name)) return acc;
+    return whitelist.reduce((acc, myRecipe) => {
+        if (myRecipe.mastery === 'MAX') return acc;
 
-            const globalData = allRecipes.find(r => this.cleanName(r.name) === myRecipe.name);
-            if (!globalData)                                 return acc;
-            if (globalData.req_level > currentLevel)         return acc;
-            if (myRecipe.mastery >= globalData.max_mastery)  return acc;
-
-            acc.push({ ...globalData, current_mastery: myRecipe.mastery });
+        if (cookingNow.some(cn => cn.name === myRecipe.name)) {
+            console.log(`⏳ [${myRecipe.name}] — уже на полке`);
             return acc;
-        }, []);
-    }
+        }
+
+        const globalData = allRecipes.find(r => this.cleanName(r.name) === myRecipe.name);
+        if (!globalData) {
+            console.log(`❓ [${myRecipe.name}] — нет в глобальной базе`);
+            return acc;
+        }
+
+        if (globalData.req_level > currentLevel) {
+            console.log(`🔒 [${myRecipe.name}] — уровень ${globalData.req_level} > ${currentLevel}`);
+            return acc;
+        }
+
+        if (myRecipe.mastery >= globalData.max_mastery) {
+            console.log(`✅ [${myRecipe.name}] — мастерство ${myRecipe.mastery}/${globalData.max_mastery} (макс.)`);
+            return acc;
+        }
+
+        acc.push({ ...globalData, current_mastery: myRecipe.mastery });
+        return acc;
+    }, []);
+}
 
     // ==========================================
     // 🔍 АНАЛИЗ СТАТУСА
