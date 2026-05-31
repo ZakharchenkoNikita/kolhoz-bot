@@ -20,6 +20,7 @@ window.setHeliTarget = setHeliTarget;
 window.setLotteryTickets = setLotteryTickets;
 window.toggleCulinarySkill = toggleCulinarySkill;
 
+// 2. Навешиваем слушатели на статические кнопки интерфейса
 // 📖 Логика сворачивания групп рецептов
 window.toggleRecipeGroup = function(titleElement) {
     titleElement.classList.toggle('collapsed');
@@ -29,7 +30,23 @@ window.toggleRecipeGroup = function(titleElement) {
     }
 };
 
-// 2. Навешиваем слушатели на статические кнопки интерфейса
+// 🔍 Логика живого поиска рецептов
+window.filterRecipes = function(query) {
+    query = query.toLowerCase().trim();
+    const cards = document.querySelectorAll('#recipes-modal-body .kb-ios-card');
+    
+    cards.forEach(card => {
+        // Ищем по всему тексту карточки (название + тэги требований)
+        const text = card.innerText.toLowerCase();
+        
+        if (text.includes(query)) {
+            card.style.display = 'flex'; // Возвращаем карточку, если есть совпадение
+        } else {
+            card.style.display = 'none'; // Скрываем, если не подходит
+        }
+    });
+};
+
 document.getElementById('account-dropdown-trigger').addEventListener('click', (e) => {
     e.stopPropagation();
     document.getElementById('account-dropdown-menu').classList.toggle('active');
