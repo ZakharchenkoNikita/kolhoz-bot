@@ -20,6 +20,15 @@ window.setHeliTarget = setHeliTarget;
 window.setLotteryTickets = setLotteryTickets;
 window.toggleCulinarySkill = toggleCulinarySkill;
 
+// 📖 Логика сворачивания групп рецептов
+window.toggleRecipeGroup = function(titleElement) {
+    titleElement.classList.toggle('collapsed');
+    const content = titleElement.nextElementSibling;
+    if (content && content.classList.contains('recipe-group-content')) {
+        content.classList.toggle('collapsed');
+    }
+};
+
 // 2. Навешиваем слушатели на статические кнопки интерфейса
 document.getElementById('account-dropdown-trigger').addEventListener('click', (e) => {
     e.stopPropagation();
