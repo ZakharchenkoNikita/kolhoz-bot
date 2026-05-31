@@ -60,7 +60,30 @@ document.getElementById('settings-close').addEventListener('click', () => {
     if (backdrop) backdrop.classList.remove('active');
 });
 
+// Слушатели для Книги Рецептов
+document.getElementById('btn-recipes').addEventListener('click', () => {
+    document.getElementById('recipes-modal').classList.add('active');
+    const backdrop = document.getElementById('recipes-backdrop');
+    if (backdrop) backdrop.classList.add('active');
+    // window.loadRecipesFromServer(); // Эту функцию мы напишем на следующем шаге
+});
+
+document.getElementById('recipes-close').addEventListener('click', () => {
+    document.getElementById('recipes-modal').classList.remove('active');
+    const backdrop = document.getElementById('recipes-backdrop');
+    if (backdrop) backdrop.classList.remove('active');
+});
+
+const recipesBackdrop = document.getElementById('recipes-backdrop');
+if (recipesBackdrop) {
+    recipesBackdrop.addEventListener('click', () => {
+        document.getElementById('recipes-modal').classList.remove('active');
+        recipesBackdrop.classList.remove('active');
+    });
+}
+
 const settingsBackdrop = document.getElementById('settings-backdrop');
+
 if (settingsBackdrop) {
     settingsBackdrop.addEventListener('click', () => {
         document.getElementById('settings-modal').classList.remove('active');
