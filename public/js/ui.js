@@ -406,34 +406,66 @@ export async function renderRecipes() {
     }
 
     // Вспомогательная функция для генерации карточек
-    const generateCards = (recipes, isLocked, isMaxed) => {
+        const generateCards = (recipes, isLocked, isMaxed) => {
         if (!recipes || recipes.length === 0) {
             return `<div style="padding: 10px 20px; color: var(--text-muted); font-size: 14px;">В этой категории пока пусто</div>`;
         }
         
-        return recipes.map(r => {
-            let tagsHtml = '';
-            let rightSideHtml = ''; // То, что будет справа от названия
+        // 🛠️ Функция генерации микро-блоков с тэгами и кнопкой [+ еще N]
+        const renderTags = (title, items) => {
+            if (!items || items.length === 0) return '';
+            let visible = '', hidden = '';
             
-            // Расставляем элементы по правильным местам
-            if (isMaxed) {
-                rightSideHtml = `<div class="recipe-tag recipe-tag-max">✨ Идеальный</div>`;
-            }
+            items.forEach((item, idx) => {
+                let cls = 'recipe-tag-locked', icon = '🔒';
+                if (item.status === 'maxed') { cls = 'recipe-tag-maxed'; icon = '✨'; }
+                else if (item.status === 'available') { cls = 'recipe-tag-available'; icon = '🔹'; }
 
-            if (isLocked) {
-                // Добавляем красивый замочек справа
-                rightSideHtml = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
-                r.requirements.forEach(req => {
-                    tagsHtml += `<div class="recipe-tag recipe-tag-req">${req}</div>`;
-                });
-            } else if (r.unlocksNext && r.unlocksNext.length > 0) {
-                r.unlocksNext.forEach(un => {
-                    tagsHtml += `<div class="recipe-tag recipe-tag-unlocks">Открывает: ${un}</div>`;
-                });
-            }
+                const html = `<div class="recipe-tag ${cls}">${icon} ${item.name}</div>`;
+                if (idx < 3) visible += html; else hidden += html;
+            });
+
+            // Магия CSS: display: contents позволит скрытым тэгам стать частью флекс-контейнера!
+            let more = hidden ? `
+                <div class="recipe-tag recipe-tag-more" onclick="this.style.display='none'; this.nextElementSibling.style.display='contents';">+ еще ${items.length - 3}</div>
+                <span style="display: none;">${hidden}</span>
+            ` : '';
 
             return `
-            <div class="kb-ios-card recipe-card-item" style="padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; ${isLocked ? 'opacity: 0.6;' : ''}">
+                <div style="margin-top: 6px;">
+                    <div style="font-size: 10px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 6px; text-transform: uppercase;">${title}</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">${visible}${more}</div>
+                </div>
+            `;
+        };
+
+        return recipes.map(r => {
+            let rightSideHtml = ''; 
+            if (isMaxed) rightSideHtml = `<div class="recipe-tag recipe-tag-maxed">✨ Идеальный</div>`;
+            if (isLocked) rightSideHtml = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
+
+            let blocksHtml = '';
+            
+            // Если рецепт заблокирован, показываем Требования
+            if (isLocked) {
+                if (r.reqSpice && r.reqSpice.length > 0) {
+                    blocksHtml += `
+                        <div style="margin-top: 6px;">
+                            <div style="font-size: 10px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 6px; text-transform: uppercase;">Требуется специя</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                ${r.reqSpice.map(s => `<div class="recipe-tag recipe-tag-spice">🧂 ${s}</div>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                blocksHtml += renderTags('Требуется приготовить', r.reqCooking);
+            }
+            
+            // Всегда показываем связи "Открывает" для всех рецептов
+            blocksHtml += renderTags('Открывает рецепты', r.unlocksNext);
+
+            return `
+            <div class="kb-ios-card recipe-card-item" style="padding: 14px 20px; display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; ${isLocked ? 'opacity: 0.7;' : ''}">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div style="font-size: 16px; font-weight: 600; ${isLocked ? 'color: var(--text-muted);' : ''}">
@@ -445,7 +477,7 @@ export async function renderRecipes() {
                     </div>
                     ${rightSideHtml}
                 </div>
-                ${tagsHtml ? `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${tagsHtml}</div>` : ''}
+                ${blocksHtml}
             </div>
             `;
         }).join('');

@@ -151,9 +151,15 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 /* Тэги для Книги Рецептов */
 .recipe-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.2px; white-space: nowrap; flex-shrink: 0; }
-.recipe-tag-req { background: rgba(255, 69, 58, 0.15); color: #ff453a; border: 1px solid rgba(255, 69, 58, 0.2); }
-.recipe-tag-unlocks { background: rgba(10, 132, 255, 0.15); color: var(--apple-blue); border: 1px solid rgba(10, 132, 255, 0.2); }
-.recipe-tag-max { background: rgba(50, 215, 75, 0.15); color: var(--apple-green); border: 1px solid rgba(50, 215, 75, 0.2); }
+
+.recipe-tag-maxed { background: rgba(50, 215, 75, 0.15); color: var(--apple-green); border: 1px solid rgba(50, 215, 75, 0.2); }
+.recipe-tag-available { background: rgba(10, 132, 255, 0.15); color: var(--apple-blue); border: 1px solid rgba(10, 132, 255, 0.2); }
+.recipe-tag-locked { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); border: 1px solid rgba(255, 255, 255, 0.15); }
+.recipe-tag-spice { background: rgba(255, 159, 10, 0.15); color: #ff9f0a; border: 1px solid rgba(255, 159, 10, 0.2); }
+
+/* Кнопка раскрытия списка */
+.recipe-tag-more { background: transparent; color: var(--text-muted); border: 1px dashed rgba(255, 255, 255, 0.3); cursor: pointer; transition: all 0.2s; }
+.recipe-tag-more:hover { background: rgba(255,255,255,0.05); }
 
 /* Сворачивание групп рецептов */
 .recipe-group-title { cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; transition: opacity 0.2s; }
