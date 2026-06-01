@@ -495,7 +495,7 @@ export async function renderRecipes() {
 
                 // 💡 Добавили cursor: pointer и onclick инжектор
                 const safeName = item.name.replace(/'/g, "\\'"); // Экранируем кавычки на всякий случай
-                const html = `<div class="recipe-tag ${cls}" style="cursor: pointer;" onclick="window.clickRecipeTag('${safeName}', event)" title="Найти этот рецепт">${icon} ${item.name}</div>`;
+                const html = `<div class="recipe-tag ${cls}" style="cursor: pointer;" onclick="window.clickRecipeTag('${safeName}', event)" title="Найти этот рецепт">${icon} <span class="hl-text" data-orig="${item.name.replace(/"/g, '&quot;')}">${item.name}</span></div>`;
                 if (idx < 3) visible += html; else hidden += html;
             });
 
@@ -539,7 +539,7 @@ export async function renderRecipes() {
                             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                                 ${r.reqSpice.map(s => {
                                     const safeSpice = s.replace(/'/g, "\\'");
-                                    return `<div class="recipe-tag recipe-tag-spice" style="cursor: pointer;" onclick="window.clickRecipeTag('${safeSpice}', event)" title="Найти рецепты с этой специей">🧂 ${s}</div>`;
+                                    return `<div class="recipe-tag recipe-tag-spice" style="cursor: pointer;" onclick="window.clickRecipeTag('${safeSpice}', event)" title="Найти рецепты с этой специей">🧂 <span class="hl-text" data-orig="${s.replace(/"/g, '&quot;')}">${s}</span></div>`;
                                 }).join('')}
                             </div>
                         </div>
@@ -556,7 +556,7 @@ export async function renderRecipes() {
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div style="font-size: 16px; font-weight: 600; ${isLocked ? 'color: var(--text-muted);' : ''}">
-                            ${r.name} <span style="font-size:13px; color:var(--text-muted); font-weight:normal; margin-left: 2px;">(Ур. ${r.level})</span>
+                            <span class="hl-text" data-orig="${r.name.replace(/"/g, '&quot;')}">${r.name}</span> <span style="font-size:13px; color:var(--text-muted); font-weight:normal; margin-left: 2px;">(Ур. ${r.level})</span>
                         </div>
                         <div class="recipe-copy-btn" onclick="window.copyRecipeLink(this, '${r.copyUrl}', event)" title="Скопировать команду">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>

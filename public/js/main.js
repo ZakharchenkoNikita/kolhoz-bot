@@ -31,37 +31,52 @@ window.toggleRecipeGroup = function(titleElement) {
 };
 
 // ==========================================
-// 🔍 ЖИВОЙ ПОИСК ПО КНИГЕ РЕЦЕПТОВ
+// 🔍 ЖИВОЙ ПОИСК + ЖЕЛТЫЙ ХАЙЛАЙТЕР
 // ==========================================
 window.filterRecipes = function(query) {
     const lowerQuery = query.toLowerCase().trim();
     
-    // Находим все группы рецептов и их заголовки
     const groups = document.querySelectorAll('.recipe-group-content');
     const titles = document.querySelectorAll('.recipe-group-title');
 
+    // Экранируем спецсимволы в запросе, чтобы регулярное выражение не сломалось (защита от дурака)
+    const safeQuery = lowerQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hlRegex = safeQuery ? new RegExp(`(${safeQuery})`, 'gi') : null;
+
     groups.forEach((group, index) => {
         let visibleCount = 0;
-        
-        // Перебираем все карточки внутри конкретной группы
         const cards = group.querySelectorAll('.recipe-card-item');
+        
         cards.forEach(card => {
-            // textContent берет весь текст карточки, даже если он скрыт под кнопкой "+ еще"
-            if (card.textContent.toLowerCase().includes(lowerQuery)) {
+            // textContent проверяет весь текст в карточке
+            const isMatch = card.textContent.toLowerCase().includes(lowerQuery);
+            
+            if (isMatch) {
                 card.style.display = 'flex'; // Показываем
                 visibleCount++;
             } else {
                 card.style.display = 'none'; // Прячем
             }
+
+            // 💡 ВАЖНО: обновляем подсветку во всех элементах (и в заголовках, и в тэгах)
+            const hlElements = card.querySelectorAll('.hl-text');
+            hlElements.forEach(el => {
+                const origText = el.getAttribute('data-orig'); // Берем чистый оригинальный текст
+                
+                // Если есть запрос, рецепт подходит и именно в этом тэге есть совпадение
+                if (isMatch && safeQuery && origText.toLowerCase().includes(lowerQuery)) {
+                    el.innerHTML = origText.replace(hlRegex, '<mark class="highlight-mark">$1</mark>');
+                } else {
+                    el.innerHTML = origText; // Сбрасываем к оригиналу
+                }
+            });
         });
 
-        // Берем заголовок этой группы и обновляем цифру в скобках
+        // Обновляем цифры в заголовках категорий
         const titleEl = titles[index];
         if (titleEl) {
-            // Проходимся по узлам, чтобы изменить только текст и не удалить SVG-стрелочку
             for (let node of titleEl.childNodes) {
                 if (node.nodeType === Node.TEXT_NODE && node.nodeValue.includes('(')) {
-                    // Отрезаем старое число (все что до скобки) и приклеиваем новое
                     const baseText = node.nodeValue.split('(')[0].trim();
                     node.nodeValue = `${baseText} (${visibleCount}) `;
                     break;
