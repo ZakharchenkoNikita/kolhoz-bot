@@ -150,7 +150,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 .settings-label { font-size: 14px; color: var(--text-muted); font-weight: 500; }
 
 /* Тэги для Книги Рецептов */
-.recipe-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.2px; }
+.recipe-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.2px; white-space: nowrap; flex-shrink: 0; }
 .recipe-tag-req { background: rgba(255, 69, 58, 0.15); color: #ff453a; border: 1px solid rgba(255, 69, 58, 0.2); }
 .recipe-tag-unlocks { background: rgba(10, 132, 255, 0.15); color: var(--apple-blue); border: 1px solid rgba(10, 132, 255, 0.2); }
 .recipe-tag-max { background: rgba(50, 215, 75, 0.15); color: var(--apple-green); border: 1px solid rgba(50, 215, 75, 0.2); }
@@ -170,6 +170,6 @@ input:checked + .slider:before { transform: translateX(20px); }
 .kb-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); width: 16px; height: 16px; pointer-events: none; }
 
 /* Кнопка копирования рецепта */
-.recipe-copy-btn { color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 6px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+.recipe-copy-btn { color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 6px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .recipe-copy-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-main); }
 .recipe-copy-btn.success { color: var(--apple-green); }
