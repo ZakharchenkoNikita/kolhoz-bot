@@ -1,7 +1,7 @@
 import { State } from './state.js';
 // 🚁 ИМПОРТ: Добавили setLotteryTickets
 import { fetchState, toggleModule, toggleMaster, resetModule, setLotteryPrio, setHeliTarget, setLotteryTickets, toggleCulinarySkill } from './api.js';
-import { renderLoop, renderHouseCard } from './ui.js';
+import { renderLoop, renderHouseCard, renderRecipes } from './ui.js'; // 📖 Добавили renderRecipes
 import { initAccountsDropdown, changeAccountCustom, toggleAccountStatus, loadAccounts, addNewAccount, deleteAccount } from './accounts.js';
 import { switchNavView } from './settings.js';
 
@@ -129,7 +129,9 @@ document.getElementById('btn-recipes').addEventListener('click', () => {
     document.getElementById('recipes-modal').classList.add('active');
     const backdrop = document.getElementById('recipes-backdrop');
     if (backdrop) backdrop.classList.add('active');
-    // window.loadRecipesFromServer(); // Эту функцию мы напишем на следующем шаге
+    
+    // Запускаем рендер при каждом открытии окна, чтобы данные всегда были актуальными!
+    renderRecipes(); 
 });
 
 document.getElementById('recipes-close').addEventListener('click', () => {

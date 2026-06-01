@@ -1,5 +1,6 @@
 import { State } from './state.js';
 import { VectorIcons, MaterialIcons, MaterialNames, modulesConfig, formatTime, getRingPercent, getModuleActionText } from './utils.js';
+import { fetchRecipesData } from './api.js';
 
 // ==========================================
 // 1. КЭШ DOM-ЭЛЕМЕНТОВ (Для молниеносного рендера)
@@ -387,4 +388,96 @@ export function renderHouseCard(profile) {
             </div>
             <div class="materials-grid">${materialsHtml}</div>
         </div>`;
+}
+
+// ==========================================
+// 📖 РЕНДЕР КНИГИ РЕЦЕПТОВ
+// ==========================================
+export async function renderRecipes() {
+    const container = document.getElementById('recipes-modal-body');
+    if (!container) return;
+
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">Загрузка рецептов...</div>';
+
+    const data = await fetchRecipesData();
+    if (!data) {
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #ff453a;">Ошибка загрузки базы рецептов</div>';
+        return;
+    }
+
+    // Вспомогательная функция для генерации карточек
+    const generateCards = (recipes, isLocked, isMaxed) => {
+        if (!recipes || recipes.length === 0) {
+            return `<div style="padding: 10px 20px; color: var(--text-muted); font-size: 14px;">В этой категории пока пусто</div>`;
+        }
+        
+        return recipes.map(r => {
+            let tagsHtml = '';
+            
+            if (isMaxed) tagsHtml += `<div class="recipe-tag recipe-tag-max">✨ Идеальный</div>`;
+
+            if (isLocked) {
+                r.requirements.forEach(req => {
+                    tagsHtml += `<div class="recipe-tag recipe-tag-req">${req}</div>`;
+                });
+            } else if (r.unlocksNext && r.unlocksNext.length > 0) {
+                r.unlocksNext.forEach(un => {
+                    tagsHtml += `<div class="recipe-tag recipe-tag-unlocks">Открывает: ${un}</div>`;
+                });
+            }
+
+            return `
+            <div class="kb-ios-card recipe-card-item" style="padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; ${isLocked ? 'opacity: 0.6;' : ''}">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="font-size: 16px; font-weight: 600; ${isLocked ? 'color: var(--text-muted);' : ''}">
+                            ${r.name} <span style="font-size:12px; color:var(--text-muted); font-weight:normal;">(Ур. ${r.level})</span>
+                        </div>
+                        <div class="recipe-copy-btn" onclick="window.copyRecipeLink(this, '${r.copyUrl}', event)" title="Скопировать команду">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </div>
+                    </div>
+                </div>
+                ${tagsHtml ? `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${tagsHtml}</div>` : ''}
+            </div>
+            `;
+        }).join('');
+    };
+
+    let html = '';
+
+    // 1. Доступно к изучению
+    html += `
+        <div class="kb-ios-group-title recipe-group-title" onclick="window.toggleRecipeGroup(this)">
+            Доступно к изучению (${data.available.length})
+            <svg class="recipe-group-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+        <div class="recipe-group-content">
+            ${generateCards(data.available, false, false)}
+        </div>
+    `;
+
+    // 2. Заблокировано
+    html += `
+        <div class="kb-ios-group-title recipe-group-title collapsed" onclick="window.toggleRecipeGroup(this)">
+            Заблокировано (${data.locked.length})
+            <svg class="recipe-group-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+        <div class="recipe-group-content collapsed">
+            ${generateCards(data.locked, true, false)}
+        </div>
+    `;
+
+    // 3. Изучено
+    html += `
+        <div class="kb-ios-group-title recipe-group-title" onclick="window.toggleRecipeGroup(this)">
+            Изучено (${data.maxed.length})
+            <svg class="recipe-group-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+        <div class="recipe-group-content">
+            ${generateCards(data.maxed, false, true)}
+        </div>
+    `;
+
+    container.innerHTML = html;
 }
