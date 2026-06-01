@@ -520,13 +520,12 @@ export async function renderRecipes() {
             let rightSideHtml = ''; 
             if (isMaxed) {
                 rightSideHtml = `<div class="recipe-tag recipe-tag-maxed">✨ Идеальный</div>`;
+            } else if (r.isHard) {
+                // 💡 Если рецепт сложный - выводим красный бейдж ВСЕГДА (и в Закрытых, и в Доступных)
+                rightSideHtml = `<div class="recipe-tag recipe-tag-hard">🔥 Сложный в открытии</div>`;
             } else if (isLocked) {
-                if (r.isHard) {
-                    // 💡 Если рецепт сложный и закрыт - выводим красивый красный бейдж вместо обычного замка
-                    rightSideHtml = `<div class="recipe-tag recipe-tag-hard">🔥 Хардкор</div>`;
-                } else {
-                    rightSideHtml = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
-                }
+                // Если рецепт обычный и закрыт - просто замочек
+                rightSideHtml = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
             }
 
             let blocksHtml = '';

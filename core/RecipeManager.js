@@ -59,7 +59,7 @@ function buildRecipeDashboardData(db, accountId) {
                 id: recipe.id,
                 name: recipe.name,
                 level: recipe.req_level || 0,
-                isHard: recipe.is_hard === 1, // 💡 Передаем флаг сложности на фронт
+                isHard: (recipe.is_hard == 1 || recipe.is_hard === '1'), // 💡 Передаем флаг сложности на фронт
                 copyUrl: `/recipe/${recipe.id}/${ings}/${recipe.time_min}/${recipe.hash}`,
                 unlocksNext: unlocksMap[recipe.name] || [], // Сюда придут объекты
                 reqCooking: [], // Требования готовки
