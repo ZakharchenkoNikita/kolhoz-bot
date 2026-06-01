@@ -51,9 +51,12 @@ function buildRecipeDashboardData(db, accountId) {
                 requirements: []
             };
 
+            // 💡 Учитываем авторские рецепты для точного поиска в профиле игрока
+            const searchName = recipe.is_author ? `${recipe.name} (авторский)` : recipe.name;
+
             // Проверка: Изучен или нет?
-            if (recipeBook.hasOwnProperty(recipe.name)) {
-                const currentMastery = recipeBook[recipe.name];
+            if (recipeBook.hasOwnProperty(searchName)) {
+                const currentMastery = recipeBook[searchName];
                 
                 if (currentMastery >= recipe.max_mastery) {
                     result.maxed.push(frontendObj);
