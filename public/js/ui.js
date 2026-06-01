@@ -413,10 +413,16 @@ export async function renderRecipes() {
         
         return recipes.map(r => {
             let tagsHtml = '';
+            let rightSideHtml = ''; // То, что будет справа от названия
             
-            if (isMaxed) tagsHtml += `<div class="recipe-tag recipe-tag-max">✨ Идеальный</div>`;
+            // Расставляем элементы по правильным местам
+            if (isMaxed) {
+                rightSideHtml = `<div class="recipe-tag recipe-tag-max">✨ Идеальный</div>`;
+            }
 
             if (isLocked) {
+                // Добавляем красивый замочек справа
+                rightSideHtml = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
                 r.requirements.forEach(req => {
                     tagsHtml += `<div class="recipe-tag recipe-tag-req">${req}</div>`;
                 });
@@ -428,15 +434,16 @@ export async function renderRecipes() {
 
             return `
             <div class="kb-ios-card recipe-card-item" style="padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; ${isLocked ? 'opacity: 0.6;' : ''}">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div style="font-size: 16px; font-weight: 600; ${isLocked ? 'color: var(--text-muted);' : ''}">
-                            ${r.name} <span style="font-size:12px; color:var(--text-muted); font-weight:normal;">(Ур. ${r.level})</span>
+                            ${r.name} <span style="font-size:13px; color:var(--text-muted); font-weight:normal; margin-left: 2px;">(Ур. ${r.level})</span>
                         </div>
                         <div class="recipe-copy-btn" onclick="window.copyRecipeLink(this, '${r.copyUrl}', event)" title="Скопировать команду">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                         </div>
                     </div>
+                    ${rightSideHtml}
                 </div>
                 ${tagsHtml ? `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${tagsHtml}</div>` : ''}
             </div>
