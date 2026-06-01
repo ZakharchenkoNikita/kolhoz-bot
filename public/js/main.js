@@ -52,20 +52,37 @@ window.copyRecipeLink = function(btnElement, url, event) {
     if (event && typeof event.stopPropagation === 'function') {
         event.stopPropagation();
     }
-    
-    navigator.clipboard.writeText(url).then(() => {
-        // Меняем иконку на галочку для визуала
+
+    const onSuccess = () => {
         const originalHtml = btnElement.innerHTML;
         btnElement.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
         btnElement.classList.add('success');
-        
         setTimeout(() => {
             btnElement.innerHTML = originalHtml;
             btnElement.classList.remove('success');
         }, 1500);
-    }).catch(err => {
-        console.error('Ошибка копирования: ', err);
-    });
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+        // Современный метод (для HTTPS и localhost)
+        navigator.clipboard.writeText(url).then(onSuccess).catch(err => console.error('Ошибка копирования: ', err));
+    } else {
+        // Запасной метод для HTTP (работает по IP-адресам)
+        try {
+            const textArea = document.createElement("textarea");
+            textArea.value = url;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            if (successful) onSuccess();
+        } catch (err) {
+            console.error('Ошибка fallback копирования: ', err);
+        }
+    }
 };
 
 document.getElementById('account-dropdown-trigger').addEventListener('click', (e) => {
