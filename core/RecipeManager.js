@@ -69,7 +69,18 @@ function buildRecipeDashboardData(db, accountId) {
             if (myStatus === 'locked') {
                 const conditions = recipe.unlock_conditions;
                 if (conditions) {
-                    if (conditions.by_spice) frontendObj.reqSpice.push(conditions.by_spice);
+                    if (conditions.by_spice) {
+                        // 💡 Магия Regex: разбиваем строку по пробелу, за которым идет ЗАГЛАВНАЯ буква
+                        const spiceList = typeof conditions.by_spice === 'string' 
+                            ? conditions.by_spice.split(/\s+(?=[А-ЯЁ])/) 
+                            : conditions.by_spice;
+                            
+                        if (Array.isArray(spiceList)) {
+                            spiceList.forEach(s => frontendObj.reqSpice.push(s.trim()));
+                        } else {
+                            frontendObj.reqSpice.push(conditions.by_spice);
+                        }
+                    }
                     if (conditions.by_cooking && Array.isArray(conditions.by_cooking)) {
                         conditions.by_cooking.forEach(req => {
                             frontendObj.reqCooking.push({
