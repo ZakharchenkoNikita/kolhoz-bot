@@ -12,6 +12,13 @@ function buildRecipeDashboardData(db, accountId) {
         const profile = db.getProfile(accountId);
         const recipeBook = profile && profile.recipe_book ? profile.recipe_book : {};
 
+        // 💡 Нормализуем ключи профиля (нижний регистр, удаление лишних и неразрывных пробелов)
+        const normalizedRecipeBook = {};
+        for (const [key, value] of Object.entries(recipeBook)) {
+            const cleanKey = key.replace(/\u00A0/g, ' ').trim().toLowerCase();
+            normalizedRecipeBook[cleanKey] = value;
+        }
+
         // 2. Строим карту связей "Кто кого открывает"
         const unlocksMap = {};
         
