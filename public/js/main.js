@@ -30,19 +30,43 @@ window.toggleRecipeGroup = function(titleElement) {
     }
 };
 
-// 🔍 Логика живого поиска рецептов
+// ==========================================
+// 🔍 ЖИВОЙ ПОИСК ПО КНИГЕ РЕЦЕПТОВ
+// ==========================================
 window.filterRecipes = function(query) {
-    query = query.toLowerCase().trim();
-    const cards = document.querySelectorAll('#recipes-modal-body .kb-ios-card');
+    const lowerQuery = query.toLowerCase().trim();
     
-    cards.forEach(card => {
-        // Ищем по всему тексту карточки (название + тэги требований)
-        const text = card.innerText.toLowerCase();
+    // Находим все группы рецептов и их заголовки
+    const groups = document.querySelectorAll('.recipe-group-content');
+    const titles = document.querySelectorAll('.recipe-group-title');
+
+    groups.forEach((group, index) => {
+        let visibleCount = 0;
         
-        if (text.includes(query)) {
-            card.style.display = 'flex'; // Возвращаем карточку, если есть совпадение
-        } else {
-            card.style.display = 'none'; // Скрываем, если не подходит
+        // Перебираем все карточки внутри конкретной группы
+        const cards = group.querySelectorAll('.recipe-card-item');
+        cards.forEach(card => {
+            // textContent берет весь текст карточки, даже если он скрыт под кнопкой "+ еще"
+            if (card.textContent.toLowerCase().includes(lowerQuery)) {
+                card.style.display = 'flex'; // Показываем
+                visibleCount++;
+            } else {
+                card.style.display = 'none'; // Прячем
+            }
+        });
+
+        // Берем заголовок этой группы и обновляем цифру в скобках
+        const titleEl = titles[index];
+        if (titleEl) {
+            // Проходимся по узлам, чтобы изменить только текст и не удалить SVG-стрелочку
+            for (let node of titleEl.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE && node.nodeValue.includes('(')) {
+                    // Отрезаем старое число (все что до скобки) и приклеиваем новое
+                    const baseText = node.nodeValue.split('(')[0].trim();
+                    node.nodeValue = `${baseText} (${visibleCount}) `;
+                    break;
+                }
+            }
         }
     });
 };
