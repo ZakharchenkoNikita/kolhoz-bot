@@ -427,8 +427,11 @@ export async function renderRecipes() {
 
             // Магия CSS: display: contents позволит скрытым тэгам стать частью флекс-контейнера!
             let more = hidden ? `
-                <div class="recipe-tag recipe-tag-more" onclick="this.style.display='none'; this.nextElementSibling.style.display='contents';">+ еще ${items.length - 3}</div>
-                <span style="display: none;">${hidden}</span>
+                <div class="recipe-tag recipe-tag-more" onclick="this.style.display='none'; this.nextElementSibling.style.display='contents';">+ еще ${items.length - 3} ▾</div>
+                <span style="display: none;">
+                    ${hidden}
+                    <div class="recipe-tag recipe-tag-more" onclick="this.parentElement.style.display='none'; this.parentElement.previousElementSibling.style.display='inline-flex';">Скрыть ▴</div>
+                </span>
             ` : '';
 
             return `
@@ -485,10 +488,10 @@ export async function renderRecipes() {
 
     let html = '';
 
-    // 1. Доступно к изучению
+    // 1. Кулинарная книга (бывш. Доступно к изучению)
     html += `
         <div class="kb-ios-group-title recipe-group-title" onclick="window.toggleRecipeGroup(this)">
-            Доступно к изучению (${data.available.length})
+            Кулинарная книга (${data.available.length})
             <svg class="recipe-group-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </div>
         <div class="recipe-group-content">
@@ -496,10 +499,10 @@ export async function renderRecipes() {
         </div>
     `;
 
-    // 2. Заблокировано
+    // 2. Закрытые рецепты (бывш. Заблокировано)
     html += `
         <div class="kb-ios-group-title recipe-group-title collapsed" onclick="window.toggleRecipeGroup(this)">
-            Заблокировано (${data.locked.length})
+            Закрытые рецепты (${data.locked.length})
             <svg class="recipe-group-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </div>
         <div class="recipe-group-content collapsed">
@@ -507,10 +510,10 @@ export async function renderRecipes() {
         </div>
     `;
 
-    // 3. Изучено
+    // 3. Идеальные рецепты (бывш. Изучено)
     html += `
         <div class="kb-ios-group-title recipe-group-title" onclick="window.toggleRecipeGroup(this)">
-            Изучено (${data.maxed.length})
+            Идеальные рецепты (${data.maxed.length})
             <svg class="recipe-group-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </div>
         <div class="recipe-group-content">
