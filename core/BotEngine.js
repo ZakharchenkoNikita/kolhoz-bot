@@ -52,9 +52,24 @@ class BotEngine {
         this.storeScanner = new StoreroomScanner(this.client, this.db, this.username); 
 
         // 📖 ДОБАВЛЕНО: Инициализация сканера книги рецептов
+        // 📖 ДОБАВЛЕНО: Инициализация сканера книги рецептов
         this.recipeScanner = new RecipeBookScanner(this.client, globalDb, this.username); 
+        this.isScanningRecipes = false; // 🔒 Мьютекс (защита от двойного сканирования)
 
         this.isRunning = false;
+    }
+
+    // 🔒 Безопасный метод сканирования (чтобы ручной и автоматический запуск не пересеклись)
+    async forceRecipeScan() {
+        if (this.isScanningRecipes) return { success: false, message: 'Уже сканируется' };
+        this.isScanningRecipes = true;
+        try {
+            await this.recipeScanner.scan();
+            this.db.saveTimer('kb_rb_timer', Date.now() + 43200000); // Сдвигаем таймер на 12 часов
+            return { success: true };
+        } finally {
+            this.isScanningRecipes = false; // Снимаем блокировку
+        }
     }
 
     async start() {
@@ -79,8 +94,7 @@ class BotEngine {
         
         // 🛠️ ВРЕМЕННЫЙ ХАК: убрали проверку (!profile.recipe_book), чтобы принудительно просканировать книгу при запуске!
         if (profile.level >= 10 && (!profile.recipe_book || Object.keys(profile.recipe_book).length === 0)) {
-            await this.recipeScanner.scan();
-            this.db.saveTimer('kb_rb_timer', Date.now() + 43200000); // Заводим таймер на 12 часов
+            await this.forceRecipeScan(); // 🔒 Используем безопасный метод
         }
 
         setInterval(() => {
@@ -163,8 +177,7 @@ class BotEngine {
 
         // 📖 ДОБАВЛЕНО: Резервное фоновое сканирование Книги Рецептов (1 раз в 12 часов)
         if (currentLevel >= 10 && rbTimer !== -1 && now >= rbTimer) {
-            await this.recipeScanner.scan();
-            this.db.saveTimer('kb_rb_timer', now + 43200000); // Обновляем таймер на 12 часов
+            await this.forceRecipeScan(); // 🔒 Используем безопасный метод
         }
 
         let executeMap = {

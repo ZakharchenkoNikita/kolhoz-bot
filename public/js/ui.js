@@ -1,6 +1,6 @@
 import { State } from './state.js';
 import { VectorIcons, MaterialIcons, MaterialNames, modulesConfig, formatTime, getRingPercent, getModuleActionText } from './utils.js';
-import { fetchRecipesData } from './api.js';
+import { fetchRecipesData, scanRecipeBook } from './api.js';
 
 // ==========================================
 // 1. КЭШ DOM-ЭЛЕМЕНТОВ (Для молниеносного рендера)
@@ -88,6 +88,37 @@ function buildModuleSettingsHtml(modId) {
         </div>
     `;
 }
+
+// ==========================================
+// 🔄 ЗАПУСК РУЧНОГО СКАНИРОВАНИЯ
+// ==========================================
+window.forceRecipeScan = async function(btnElement) {
+    if (!State.accountId) return;
+    
+    const overlay = document.getElementById('recipe-loader');
+    if (overlay) overlay.classList.add('active'); // Показываем лоадер
+    
+    // Блокируем кнопку
+    btnElement.style.pointerEvents = 'none';
+    btnElement.style.opacity = '0.5';
+
+    try {
+        const res = await scanRecipeBook(State.accountId);
+        if (res.error) {
+            alert("Ошибка: " + res.error);
+        } else {
+            // Если успех - заново рисуем книгу с новыми данными!
+            await renderRecipes(); 
+        }
+    } catch (e) {
+        console.error("Ошибка при сканировании:", e);
+        alert("Не удалось просканировать Книгу Рецептов.");
+    } finally {
+        if (overlay) overlay.classList.remove('active'); // Прячем лоадер
+        btnElement.style.pointerEvents = 'all';
+        btnElement.style.opacity = '1';
+    }
+};
 
 // Глобальная функция для открытия/закрытия шторки
 window.toggleModuleSettings = function(modId, event) {

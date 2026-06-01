@@ -207,6 +207,33 @@ app.get('/api/recipes', (req, res) => {
     }
 });
 
+// === РУЧНОЕ СКАНИРОВАНИЕ КНИГИ РЕЦЕПТОВ ===
+app.post('/api/scan-recipes', async (req, res) => {
+    const accountId = req.body.accountId;
+    
+    // Ищем живого бота в словаре engines, который уже работает
+    const bot = engines[accountId]; 
+    if (!bot) {
+        return res.status(400).json({ error: 'Бот не запущен' });
+    }
+
+    try {
+        // Вызываем наш новый безопасный метод напрямую у бота!
+        // Бот сам просканирует и сам сдвинет таймер на 12 часов.
+        const result = await bot.forceRecipeScan();
+        
+        if (!result.success) {
+            // Если мы нажали кнопку 2 раза, или бот УЖЕ сканирует в фоне
+            return res.status(429).json({ error: 'Сканирование уже в процессе' });
+        }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error(`❌ Ошибка ручного сканирования рецептов [ID: ${accountId}]:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // === МОНИТОР ОПЕРАТИВНОЙ ПАМЯТИ ===
 setInterval(() => {
     const memory = process.memoryUsage();

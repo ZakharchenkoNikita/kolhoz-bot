@@ -20,6 +20,16 @@ export async function setLotteryPrio(prio, event) {
     });
 }
 
+// 📖 Ручное сканирование Книги Рецептов
+export async function scanRecipeBook(accountId) {
+    const response = await fetch('/api/scan-recipes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId })
+    });
+    return response.json();
+}
+
 // 📖 Запрос данных для Дашборда рецептов
 export async function fetchRecipesData() {
     if (!State.accountId) return null;
