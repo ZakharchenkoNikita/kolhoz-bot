@@ -204,3 +204,17 @@ input:checked + .slider:before { transform: translateX(20px); }
     margin-bottom: 15px;
 }
 @keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* ========================================== */
+/* ЭППЛОВСКАЯ ПОДСВЕТКА ПОИСКА                */
+/* ========================================== */
+mark.highlight-mark {
+    background-color: rgba(255, 214, 10, 0.35) !important; /* Мягкий системный желтый Apple (Dark Mode) */
+    color: inherit !important; /* Жестко сохраняем оригинальный цвет текста */
+    border-radius: 4px !important; /* Мягкие скругления */
+    padding: 1px 2px !important;
+    margin: 0 -1px !important; /* Компенсируем паддинг, чтобы текст не прыгал */
+    box-shadow: none !important;
+    text-shadow: none !important;
+    font-weight: inherit !important;
+}
