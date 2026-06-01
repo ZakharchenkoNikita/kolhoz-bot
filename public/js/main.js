@@ -47,6 +47,25 @@ window.filterRecipes = function(query) {
     });
 };
 
+// 📋 Копирование ссылки рецепта
+window.copyRecipeLink = function(btnElement, url, event) {
+    if (event) event.stopPropagation(); // Чтобы не срабатывал клик по карточке, если добавим
+    
+    navigator.clipboard.writeText(url).then(() => {
+        // Меняем иконку на галочку для визуала
+        const originalHtml = btnElement.innerHTML;
+        btnElement.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+        btnElement.classList.add('success');
+        
+        setTimeout(() => {
+            btnElement.innerHTML = originalHtml;
+            btnElement.classList.remove('success');
+        }, 1500);
+    }).catch(err => {
+        console.error('Ошибка копирования: ', err);
+    });
+};
+
 document.getElementById('account-dropdown-trigger').addEventListener('click', (e) => {
     e.stopPropagation();
     document.getElementById('account-dropdown-menu').classList.toggle('active');

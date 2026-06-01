@@ -168,3 +168,8 @@ input:checked + .slider:before { transform: translateX(20px); }
 .kb-search-input { width: 100%; box-sizing: border-box; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--glass-border); border-radius: 10px; padding: 10px 14px 10px 36px; color: var(--text-main); font-family: inherit; font-size: 15px; outline: none; transition: background 0.2s, border-color 0.2s; }
 .kb-search-input:focus { background: rgba(255, 255, 255, 0.12); border-color: var(--apple-blue); }
 .kb-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); width: 16px; height: 16px; pointer-events: none; }
+
+/* Кнопка копирования рецепта */
+.recipe-copy-btn { color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 6px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+.recipe-copy-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-main); }
+.recipe-copy-btn.success { color: var(--apple-green); }
