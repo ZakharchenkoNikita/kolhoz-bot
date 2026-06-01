@@ -7,7 +7,7 @@
  */
 function buildRecipeDashboardData(db, accountId) {
     try {
-        // 1. Получаем рецепты и профиль (твой DBManager парсит JSON автоматически!)
+        // 1. Получаем рецепты и профиль
         const allRecipes = db.getAllRecipes();
         const profile = db.getProfile(accountId);
         const recipeBook = profile && profile.recipe_book ? profile.recipe_book : {};
@@ -23,7 +23,7 @@ function buildRecipeDashboardData(db, accountId) {
         const unlocksMap = {};
         
         for (const recipe of allRecipes) {
-            const conditions = recipe.unlock_conditions; // Уже готовый объект!
+            const conditions = recipe.unlock_conditions; 
             
             if (conditions && conditions.by_cooking && Array.isArray(conditions.by_cooking)) {
                 for (const reqRecipeName of conditions.by_cooking) {
@@ -52,18 +52,19 @@ function buildRecipeDashboardData(db, accountId) {
             const frontendObj = {
                 id: recipe.id,
                 name: recipe.name,
-                level: recipe.req_level || 0, // Берем из твоей базы
+                level: recipe.req_level || 0,
                 copyUrl: `/recipe/${recipe.id}/${ings}/${recipe.time_min}/${recipe.hash}`,
-                unlocksNext: unlocksMap[recipe.name] || [], // Подставляем вычисленные связи
+                unlocksNext: unlocksMap[recipe.name] || [], 
                 requirements: []
             };
 
             // 💡 Учитываем авторские рецепты для точного поиска в профиле игрока
-            const searchName = recipe.is_author ? `${recipe.name} (авторский)` : recipe.name;
+            const rawSearchName = recipe.is_author ? `${recipe.name} (авторский)` : recipe.name;
+            const searchKey = rawSearchName.replace(/\u00A0/g, ' ').trim().toLowerCase();
 
-            // Проверка: Изучен или нет?
-            if (recipeBook.hasOwnProperty(searchName)) {
-                const currentMastery = recipeBook[searchName];
+            // Проверка: Изучен или нет? (ищем по нормализованному ключу)
+            if (normalizedRecipeBook.hasOwnProperty(searchKey)) {
+                const currentMastery = normalizedRecipeBook[searchKey];
                 
                 if (currentMastery >= recipe.max_mastery) {
                     result.maxed.push(frontendObj);
