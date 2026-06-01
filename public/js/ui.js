@@ -107,6 +107,29 @@ window.clearRecipeSearch = function() {
     }
 };
 
+
+// ==========================================
+// 🎯 СМАРТ-ИНЖЕКТОР (Клик по тэгам)
+// ==========================================
+window.clickRecipeTag = function(searchText, event) {
+    if (event) event.stopPropagation(); // Чтобы клик не "проваливался" дальше
+
+    const input = document.getElementById('recipe-search-input');
+    if (input) {
+        input.value = searchText; // Вставляем название рецепта/специи
+        
+        // Дергаем наши готовые функции фильтрации и показа крестика
+        if (window.filterRecipes) window.filterRecipes(searchText);
+        if (window.toggleClearBtn) window.toggleClearBtn(searchText);
+
+        // Плавно скроллим модалку в самый верх, чтобы показать результат
+        const modalBody = document.getElementById('recipes-modal-body');
+        if (modalBody) {
+            modalBody.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+};
+
 // ==========================================
 // 🔄 ЗАПУСК РУЧНОГО СКАНИРОВАНИЯ
 // ==========================================
@@ -470,7 +493,9 @@ export async function renderRecipes() {
                 if (item.status === 'maxed') { cls = 'recipe-tag-maxed'; icon = '✨'; }
                 else if (item.status === 'available') { cls = 'recipe-tag-available'; icon = '🔹'; }
 
-                const html = `<div class="recipe-tag ${cls}">${icon} ${item.name}</div>`;
+                // 💡 Добавили cursor: pointer и onclick инжектор
+                const safeName = item.name.replace(/'/g, "\\'"); // Экранируем кавычки на всякий случай
+                const html = `<div class="recipe-tag ${cls}" style="cursor: pointer;" onclick="window.clickRecipeTag('${safeName}', event)" title="Найти этот рецепт">${icon} ${item.name}</div>`;
                 if (idx < 3) visible += html; else hidden += html;
             });
 
@@ -505,7 +530,10 @@ export async function renderRecipes() {
                         <div style="margin-top: 6px;">
                             <div style="font-size: 10px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 6px; text-transform: uppercase;">Требуется специя</div>
                             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                                ${r.reqSpice.map(s => `<div class="recipe-tag recipe-tag-spice">🧂 ${s}</div>`).join('')}
+                                ${r.reqSpice.map(s => {
+                                    const safeSpice = s.replace(/'/g, "\\'");
+                                    return `<div class="recipe-tag recipe-tag-spice" style="cursor: pointer;" onclick="window.clickRecipeTag('${safeSpice}', event)" title="Найти рецепты с этой специей">🧂 ${s}</div>`;
+                                }).join('')}
                             </div>
                         </div>
                     `;
@@ -571,7 +599,7 @@ export async function renderRecipes() {
     `;
 
     container.innerHTML = html;
-    
+
     setTimeout(() => {
         const searchInput = document.getElementById('recipe-search-input');
         if (searchInput && searchInput.value) {
