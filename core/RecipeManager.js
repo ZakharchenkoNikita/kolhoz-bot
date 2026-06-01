@@ -55,11 +55,11 @@ function buildRecipeDashboardData(db, accountId) {
         for (const recipe of allRecipes) {
             let ings = Array.isArray(recipe.ingredients) ? recipe.ingredients.join('/') : (recipe.ingredients || '');
             const myStatus = recipeStatusMap[recipe.name];
-
             const frontendObj = {
                 id: recipe.id,
                 name: recipe.name,
                 level: recipe.req_level || 0,
+                isHard: recipe.is_hard === 1, // 💡 Передаем флаг сложности на фронт
                 copyUrl: `/recipe/${recipe.id}/${ings}/${recipe.time_min}/${recipe.hash}`,
                 unlocksNext: unlocksMap[recipe.name] || [], // Сюда придут объекты
                 reqCooking: [], // Требования готовки

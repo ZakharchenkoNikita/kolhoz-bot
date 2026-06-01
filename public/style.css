@@ -156,6 +156,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 .recipe-tag-available { background: rgba(10, 132, 255, 0.15); color: var(--apple-blue); border: 1px solid rgba(10, 132, 255, 0.2); }
 .recipe-tag-locked { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); border: 1px solid rgba(255, 255, 255, 0.15); }
 .recipe-tag-spice { background: rgba(255, 159, 10, 0.15); color: #ff9f0a; border: 1px solid rgba(255, 159, 10, 0.2); }
+.recipe-tag-hard { background: rgba(255, 69, 58, 0.15); color: #ff453a; border: 1px solid rgba(255, 69, 58, 0.2); } /* 💡 Тэг для сложных рецептов */
 
 /* Кнопка раскрытия списка */
 .recipe-tag-more { background: transparent; color: var(--text-muted); border: 1px dashed rgba(255, 255, 255, 0.3); cursor: pointer; transition: all 0.2s; }

@@ -264,23 +264,19 @@ class CellarModule extends BaseModule {
         if (myRecipe.mastery === 'MAX') return acc;
 
         if (cookingNow.some(cn => cn.name === myRecipe.name)) {
-            console.log(`⏳ [${myRecipe.name}] — уже на полке`);
             return acc;
         }
 
         const globalData = allRecipes.find(r => this.cleanName(r.name) === myRecipe.name);
         if (!globalData) {
-            console.log(`❓ [${myRecipe.name}] — нет в глобальной базе`);
             return acc;
         }
 
         if (globalData.req_level > currentLevel) {
-            console.log(`🔒 [${myRecipe.name}] — уровень ${globalData.req_level} > ${currentLevel}`);
             return acc;
         }
 
         if (myRecipe.mastery >= globalData.max_mastery) {
-            console.log(`✅ [${myRecipe.name}] — мастерство ${myRecipe.mastery}/${globalData.max_mastery} (макс.)`);
             return acc;
         }
 
