@@ -6,6 +6,7 @@ require('./core/Logger').init();
 const BotEngine = require('./core/BotEngine');
 const DBManager = require('./core/Database');
 const Scheduler = require('./core/Scheduler');
+const { buildRecipeDashboardData } = require('./core/RecipeManager');
 
 const app = express();
 const PORT = 3000;
@@ -188,6 +189,22 @@ app.post('/api/account-setting', (req, res) => {
         db.saveAccountSettings(req.body.accountId, req.body.key, req.body.value);
     }
     res.json({ success: true });
+});
+
+// 📖 API для получения Дашборда Рецептов
+app.get('/api/recipes', (req, res) => {
+    const accountId = req.query.accountId;
+    if (!accountId) {
+        return res.status(400).json({ error: "No accountId provided" });
+    }
+    try {
+        // Передаем твою глобальную переменную db в нашу функцию-сборщик
+        const dashboardData = buildRecipeDashboardData(db, accountId);
+        res.json(dashboardData); // Express сам превратит это в красивый JSON
+    } catch (error) {
+        console.error("❌ Ошибка API рецептов:", error);
+        res.status(500).json({ error: "Server error" });
+    }
 });
 
 // === МОНИТОР ОПЕРАТИВНОЙ ПАМЯТИ ===

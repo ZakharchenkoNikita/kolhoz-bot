@@ -20,6 +20,19 @@ export async function setLotteryPrio(prio, event) {
     });
 }
 
+// 📖 Запрос данных для Дашборда рецептов
+export async function fetchRecipesData() {
+    if (!State.accountId) return null;
+    try {
+        const response = await fetch(`/api/recipes?accountId=${State.accountId}`);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.error("Ошибка при получении рецептов:", error);
+        return null;
+    }
+}
+
 // 🚁 ДОБАВЛЕНО: Чистая функция для настройки вертолетов
 export async function setHeliTarget(target, event) {
     if (event) {

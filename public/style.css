@@ -170,6 +170,6 @@ input:checked + .slider:before { transform: translateX(20px); }
 .kb-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); width: 16px; height: 16px; pointer-events: none; }
 
 /* Кнопка копирования рецепта */
-.recipe-copy-btn { color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 6px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.recipe-copy-btn { width: 24px; height: 24px; box-sizing: border-box; color: var(--text-muted); cursor: pointer; border-radius: 6px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .recipe-copy-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-main); }
 .recipe-copy-btn.success { color: var(--apple-green); }
