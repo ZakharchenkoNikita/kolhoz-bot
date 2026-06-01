@@ -49,7 +49,9 @@ window.filterRecipes = function(query) {
 
 // 📋 Копирование ссылки рецепта
 window.copyRecipeLink = function(btnElement, url, event) {
-    if (event) event.stopPropagation(); // Чтобы не срабатывал клик по карточке, если добавим
+    if (event && typeof event.stopPropagation === 'function') {
+        event.stopPropagation();
+    }
     
     navigator.clipboard.writeText(url).then(() => {
         // Меняем иконку на галочку для визуала
