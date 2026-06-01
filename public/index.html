@@ -135,9 +135,12 @@
         </div>
 
     <div class="kb-modal-search" style="display: flex; gap: 10px; align-items: center;">
-            <div class="kb-search-input-wrap" style="flex-grow: 1;">
+            <div class="kb-search-input-wrap" style="flex-grow: 1; position: relative;">
                 <svg class="kb-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <input type="text" class="kb-search-input" id="recipe-search-input" placeholder="Поиск рецептов, специй, связей..." oninput="window.filterRecipes(this.value)">
+                
+                <input type="text" class="kb-search-input" id="recipe-search-input" placeholder="Поиск рецептов, специй, связей..." oninput="window.filterRecipes(this.value); window.toggleClearBtn(this.value)">
+                
+                <svg class="kb-search-clear" id="recipe-search-clear" onclick="window.clearRecipeSearch()" style="display: none; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; cursor: pointer; color: var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </div>
             <div class="kb-mini-btn" onclick="window.forceRecipeScan(this)" title="Синхронизировать с игрой" style="background: rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>

@@ -90,6 +90,24 @@ function buildModuleSettingsHtml(modId) {
 }
 
 // ==========================================
+// ❌ КРЕСТИК ОЧИСТКИ ПОИСКА
+// ==========================================
+window.toggleClearBtn = function(val) {
+    const btn = document.getElementById('recipe-search-clear');
+    if (btn) btn.style.display = val.length > 0 ? 'block' : 'none';
+};
+
+window.clearRecipeSearch = function() {
+    const input = document.getElementById('recipe-search-input');
+    if (input) {
+        input.value = ''; // Стираем текст
+        window.filterRecipes(''); // Сбрасываем фильтр (показываем все рецепты)
+        window.toggleClearBtn(''); // Прячем крестик
+        input.focus(); // Возвращаем мигающий курсор, чтобы сразу писать новый запрос
+    }
+};
+
+// ==========================================
 // 🔄 ЗАПУСК РУЧНОГО СКАНИРОВАНИЯ
 // ==========================================
 window.forceRecipeScan = async function(btnElement) {
@@ -553,4 +571,13 @@ export async function renderRecipes() {
     `;
 
     container.innerHTML = html;
+    
+    setTimeout(() => {
+        const searchInput = document.getElementById('recipe-search-input');
+        if (searchInput && searchInput.value) {
+            // Если в строке остался текст от прошлого поиска - фильтруем сразу!
+            if (window.filterRecipes) window.filterRecipes(searchInput.value);
+            if (window.toggleClearBtn) window.toggleClearBtn(searchInput.value);
+        }
+    }, 50); // Небольшой таймаут гарантирует, что DOM успел отрисовать карточки
 }
