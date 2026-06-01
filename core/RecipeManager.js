@@ -9,11 +9,9 @@ function buildRecipeDashboardData(db, accountId) {
         const profile = db.getProfile(accountId);
         const recipeBook = profile && profile.recipe_book ? profile.recipe_book : {};
 
-        // 💡 1. НАША "МЯСОРУБКА"
-        // Функция удаляет ВСЁ, кроме букв (русских/английских) и цифр, и переводит в нижний регистр
+        // 💡 1. НАША "МЯСОРУБКА" (Нижний регистр, только буквы и цифры)
         const sanitize = (str) => str.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
 
-        // Нормализуем профиль игрока
         const normalizedRecipeBook = {};
         for (const [key, value] of Object.entries(recipeBook)) {
             normalizedRecipeBook[sanitize(key)] = value;
@@ -46,21 +44,38 @@ function buildRecipeDashboardData(db, accountId) {
                 requirements: []
             };
 
-            // 💡 Формируем имя для поиска и пропускаем через ту же "мясорубку"
-            const expectedName = recipe.is_author ? `${recipe.name}авторский` : recipe.name;
-            const searchKey = sanitize(expectedName);
+            // 💡 4. Генерируем оба варианта имени
+            const nameClean = sanitize(recipe.name);
+            const nameAuthor = sanitize(`${recipe.name}авторский`);
 
-            // 4. Проверка совпадений
-            if (normalizedRecipeBook.hasOwnProperty(searchKey)) {
-                const currentMastery = normalizedRecipeBook[searchKey];
-                
+            let currentMastery = null;
+
+            // 🛡️ УМНЫЙ ФОЛБЭК: Защита от ошибок парсера БД
+            if (recipe.is_author) {
+                if (normalizedRecipeBook.hasOwnProperty(nameAuthor)) {
+                    currentMastery = normalizedRecipeBook[nameAuthor];
+                } else if (normalizedRecipeBook.hasOwnProperty(nameClean)) {
+                    // Баг БД: флаг стоит 1, но у игрока рецепт без приписки
+                    currentMastery = normalizedRecipeBook[nameClean]; 
+                }
+            } else {
+                if (normalizedRecipeBook.hasOwnProperty(nameClean)) {
+                    currentMastery = normalizedRecipeBook[nameClean];
+                } else if (normalizedRecipeBook.hasOwnProperty(nameAuthor)) {
+                    // Баг БД: флаг стоит 0, но у игрока рецепт с припиской
+                    currentMastery = normalizedRecipeBook[nameAuthor]; 
+                }
+            }
+
+            // 5. Проверка совпадений
+            if (currentMastery !== null) {
                 if (currentMastery >= recipe.max_mastery) {
                     result.maxed.push(frontendObj);
                 } else {
                     result.available.push(frontendObj);
                 }
             } else {
-                // Если не нашли — Заблокировано
+                // Если не нашли вообще ни в каком виде — Заблокировано
                 const conditions = recipe.unlock_conditions;
                 if (conditions) {
                     if (conditions.by_spice) frontendObj.requirements.push(`🧂 Специя: ${conditions.by_spice}`);
@@ -72,7 +87,7 @@ function buildRecipeDashboardData(db, accountId) {
             }
         }
 
-        // 5. Сортируем
+        // 6. Сортируем
         const sortByLevel = (a, b) => a.level - b.level;
         result.available.sort(sortByLevel);
         result.locked.sort(sortByLevel);
