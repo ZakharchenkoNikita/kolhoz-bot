@@ -20,6 +20,7 @@ const ArenaModule = require('../modules/Arena');
 const DesignerModule = require('../modules/Designer'); 
 const UpgraderModule = require('../modules/Upgrader'); 
 const TasksModule = require('../modules/TasksModule'); // 📋 ДОБАВЛЕНО: Импорт модуля заданий
+const SpiceBuyerModule = require('../modules/SpiceBuyer');
 
 class DBWrapper {
     constructor(globalDb, accountId) {
