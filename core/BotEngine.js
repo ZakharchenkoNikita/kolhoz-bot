@@ -124,7 +124,7 @@ class BotEngine {
 
         let pStr = this.db.getAccountSettings('priorities');
         // 📋 ДОБАВЛЕНО: "tasks" в конец списка
-        let defaultPriorities = ["farm", "rancho", "zagon", "nursery", "ponds", "cellar", "treasury", "heli", "zavalinka", "arena", "upgrader", "designer", "lottery", "tasks"];
+        let defaultPriorities = ["farm", "rancho", "zagon", "nursery", "ponds", "cellar", "treasury", "heli", "zavalinka", "arena", "upgrader", "designer", "lottery", "tasks", "spice"];
         let priorities = pStr ? JSON.parse(pStr) : defaultPriorities;
         
         defaultPriorities.forEach(mod => {
@@ -206,14 +206,13 @@ class BotEngine {
             },
             // 🌶️ ИЗМЕНЕНО: Запуск закупки специй по кнопке (разово)
             'spice': async () => { 
-                let isUnlockRecipeOn = (this.getTimer('unlock_recipe') === 'true');
+                let isUnlockRecipeOn = (this.db.getTimer('unlock_recipe') === 'true');
                 
-                // Запуск происходит только если нажата кнопка (флаг === 'true')
                 if (isUnlockRecipeOn) {
-                    await SpiceBuyerModule.execute(this.client, this.db, this.workers);
+                    // 🌶️ ИЗМЕНЕНО: Передаем this.db.db вместо this.db
+                    await SpiceBuyerModule.execute(this.client, this.db.db, this.workers);
                     
-                    // 🛑 СРАЗУ ВЫКЛЮЧАЕМ ФЛАГ, чтобы бот сделал только 1 круг закупки и остановился
-                    this.saveTimer('unlock_recipe', 'false'); 
+                    this.db.saveTimer('unlock_recipe', 'false'); 
                 }
             },
             // 📋 ДОБАВЛЕНО: Инструкция запуска для заданий
