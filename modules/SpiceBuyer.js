@@ -1,4 +1,4 @@
-const BaseModule = require('./BaseModule');
+const BaseModule = require('../core/BaseModule');
 const cheerio = require('cheerio');
 
 class SpiceBuyer extends BaseModule {
