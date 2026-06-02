@@ -1,6 +1,6 @@
 import { State } from './state.js';
 import { VectorIcons, MaterialIcons, MaterialNames, modulesConfig, formatTime, getRingPercent, getModuleActionText } from './utils.js';
-import { fetchRecipesData, scanRecipeBook } from './api.js';
+import { fetchRecipesData, scanRecipeBook, setSpiceBuyerStatus } from './api.js';
 
 // ==========================================
 // 1. КЭШ DOM-ЭЛЕМЕНТОВ (Для молниеносного рендера)
@@ -107,6 +107,55 @@ window.clearRecipeSearch = function() {
     }
 };
 
+// ==========================================
+// 🛒 ТУМБЛЕР ЗАКУПКИ СПЕЦИЙ
+// ==========================================
+window.toggleSpiceBuyer = async function(btnElement) {
+    if (!State.accountId) return;
+
+    // Проверяем текущее состояние (включена ли уже закупка)
+    const isBuying = btnElement.classList.contains('active-buyer');
+    const newValue = isBuying ? 'false' : 'true'; // Если работает - шлем false, если стоит - шлем true
+
+    // Визуально блокируем кнопку на время отправки запроса
+    btnElement.style.pointerEvents = 'none';
+    btnElement.style.opacity = '0.5';
+
+    try {
+        await setSpiceBuyerStatus(State.accountId, newValue);
+
+        const iconEl = btnElement.querySelector('.spice-buyer-icon');
+        const textEl = btnElement.querySelector('.spice-buyer-text');
+
+        if (!isBuying) {
+            // ВКЛЮЧАЕМ РЕЖИМ "СТОП" (Красный дизайн)
+            btnElement.classList.add('active-buyer');
+            btnElement.style.backgroundColor = 'rgba(255, 69, 58, 0.15)';
+            btnElement.style.color = '#ff453a';
+            btnElement.style.borderColor = 'rgba(255, 69, 58, 0.2)';
+            
+            // Меняем иконку на квадрат (Стоп)
+            iconEl.innerHTML = '<rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>';
+            textEl.innerText = 'Остановить';
+        } else {
+            // ВОЗВРАЩАЕМ РЕЖИМ "СТАРТ" (Синий дизайн)
+            btnElement.classList.remove('active-buyer');
+            btnElement.style.backgroundColor = 'rgba(10, 132, 255, 0.15)';
+            btnElement.style.color = 'var(--apple-blue)';
+            btnElement.style.borderColor = 'rgba(10, 132, 255, 0.2)';
+            
+            // Меняем иконку на корзинку
+            iconEl.innerHTML = '<circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>';
+            textEl.innerText = 'Закупить специи';
+        }
+    } catch (e) {
+        console.error("Ошибка при переключении авто-закупки:", e);
+        alert("Не удалось связаться с сервером.");
+    } finally {
+        btnElement.style.pointerEvents = 'all';
+        btnElement.style.opacity = '1';
+    }
+};
 
 // ==========================================
 // 🎯 СМАРТ-ИНЖЕКТОР (Клик по тэгам)

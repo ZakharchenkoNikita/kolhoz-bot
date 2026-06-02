@@ -206,6 +206,18 @@ class BotEngine {
                     await LotteryModule.execute(this.client, this.db, this.workers); 
                 }
             },
+            // 🌶️ ИЗМЕНЕНО: Запуск закупки специй по кнопке (разово)
+            'spice': async () => { 
+                let isUnlockRecipeOn = (this.db.getTimer(this.accountId, 'unlock_recipe') === 'true');
+                
+                // Запуск происходит только если нажата кнопка (флаг === 'true')
+                if (isUnlockRecipeOn) {
+                    await SpiceBuyerModule.execute(this.client, this.db, this.workers);
+                    
+                    // 🛑 СРАЗУ ВЫКЛЮЧАЕМ ФЛАГ, чтобы бот сделал только 1 круг закупки и остановился
+                    this.db.saveTimer(this.accountId, 'unlock_recipe', 'false'); 
+                }
+            },
             // 📋 ДОБАВЛЕНО: Инструкция запуска для заданий
             'tasks': async () => { if (isTasksOn && tasksTimer !== -1 && now >= tasksTimer) await TasksModule.execute(this.client, this.db, this.workers); }
         };

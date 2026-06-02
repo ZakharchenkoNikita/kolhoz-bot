@@ -20,6 +20,18 @@ export async function setLotteryPrio(prio, event) {
     });
 }
 
+// ==========================================
+// 🛒 АВТО-ЗАКУПКА СПЕЦИЙ
+// ==========================================
+export async function setSpiceBuyerStatus(accountId, value) {
+    const response = await fetch('/api/account-setting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId, key: 'unlock_recipe', value: value })
+    });
+    return response.json();
+}
+
 // 📖 Ручное сканирование Книги Рецептов
 export async function scanRecipeBook(accountId) {
     const response = await fetch('/api/scan-recipes', {

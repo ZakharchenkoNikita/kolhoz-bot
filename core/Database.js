@@ -397,6 +397,60 @@ class DBManager {
             return row;
         });
     }
+
+    // 🌶️ ДОБАВЛЕНО: Точечное добавление открытого рецепта в базу
+    addUnlockedRecipe(accountId, recipeName) {
+        const profile = this.getProfile(accountId);
+        if (!profile) return;
+        
+        // Инициализируем книгу, если она вдруг пуста
+        if (!profile.recipe_book) profile.recipe_book = {};
+        
+        // Добавляем рецепт с мастерством 0
+        profile.recipe_book[recipeName] = 0;
+        
+        // Сохраняем ТОЛЬКО это поле, чтобы не делать тяжелый апдейт всего профиля
+        const stmt = this.db.prepare('UPDATE profile SET recipe_book = ? WHERE account_id = ?');
+        stmt.run(JSON.stringify(profile.recipe_book), accountId);
+    }
+
+    getSpicesToUnlock(accountId) {
+        const profile = this.getProfile(accountId);
+        if (!profile || profile.level === 0) return {};
+
+        const recipes = this.getAllRecipes();
+        const spiceMap = {}; 
+
+        // Черный список специй за рубины (строго именительный падеж)
+        const RUBY_SPICES = [
+            'Перец чёрный молотый',
+            'Спирт для ликёров',
+            'Корица',
+            'Куркума',
+            'Живая вода',
+            'Мука'
+        ];
+
+        for (const recipe of recipes) {
+            if (profile.level >= recipe.req_level && !profile.recipe_book[recipe.name]) {
+                if (recipe.unlock_conditions && recipe.unlock_conditions.by_spice) {
+                    
+                    let spicesArray = Array.isArray(recipe.unlock_conditions.by_spice) 
+                        ? recipe.unlock_conditions.by_spice 
+                        : recipe.unlock_conditions.by_spice.split(/(?=[A-ZА-ЯЁ])/).map(s => s.trim()).filter(Boolean);
+                    
+                    spicesArray.forEach(spice => {
+                        if (RUBY_SPICES.includes(spice)) return;
+                        
+                        if (!spiceMap[spice]) spiceMap[spice] = [];
+                        spiceMap[spice].push(recipe.name);
+                    });
+                }
+            }
+        }
+
+        return spiceMap; 
+    }
 }
 
 module.exports = DBManager;
