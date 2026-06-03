@@ -35,7 +35,6 @@ class SpiceBuyer {
             let knownRecipes = profile.recipe_book || {};
             let dailyRecipes = {};
             
-            // Достаем то, что открыли СЕГОДНЯ из БД
             try {
                 const today = new Date().toLocaleDateString('ru-RU');
                 const key = `opened_recipes_${today}`;
@@ -44,7 +43,6 @@ class SpiceBuyer {
                 if (row && row.value) dailyRecipes = JSON.parse(row.value);
             } catch (e) {}
 
-            // Чистим список специй от уже существующих рецептов
             for (const spice in spiceMap) {
                 spiceMap[spice] = spiceMap[spice].filter(recipe => {
                     const alreadyInBook = knownRecipes[recipe];
@@ -70,14 +68,17 @@ class SpiceBuyer {
             
             const result = await this.processSinglePage(client, db, accountId, currentPage, spiceMap, username);
 
-            if (result.boughtSomething) {
-                console.log(`[${username}] ⏳ Купил специю. Уступаю очередь другим модулям!`);
-            } else if (result.hasMorePages) {
-                console.log(`[${username}] ⏭️ Страница ${currentPage + 1} пуста. Уступаю очередь...`);
-                this.shopState[accountId]++;
+            // 🛠️ ИСПРАВЛЕНИЕ: Теперь бот ВСЕГДА листает страницу вперед, если они еще есть
+            if (result.hasMorePages) {
+                this.shopState[accountId]++; // Переходим на следующую
+                if (result.boughtSomething) {
+                    console.log(`[${username}] ⏳ Скупил всё на стр. ${currentPage + 1}. Уступаю очередь, дальше пойду на стр. ${currentPage + 2}...`);
+                } else {
+                    console.log(`[${username}] ⏭️ Страница ${currentPage + 1} пуста. Уступаю очередь...`);
+                }
             } else {
                 console.log(`[${username}] 🏁 Конец магазина. Начинаю поиск с начала.`);
-                this.shopState[accountId] = 0; 
+                this.shopState[accountId] = 0; // Сбрасываем в начало
             }
             
         } catch (error) {
@@ -113,22 +114,26 @@ class SpiceBuyer {
                 return { boughtSomething: false, hasMorePages: false }; 
             }
 
-            const aTag = $(items[i]).find('a[href*="buyLink"]');
-            if (!aTag.length) continue;
-
-            const itemName = aTag.find('span').eq(1).text().trim();
-            const buyLink = aTag.attr('href').replace('./', '/shop/');
+            // 🛠️ ИСПРАВЛЕНИЕ: Берем имя специи до того, как искать ссылку <a>
+            const itemName = $(items[i]).find('span').eq(1).text().trim();
             const originalSpiceName = this.findOriginalSpiceName(itemName);
             
             if (originalSpiceName && spiceMap[originalSpiceName]) {
+                const aTag = $(items[i]).find('a[href*="buyLink"]');
+                
+                // 🛑 ПРОВЕРКА НА УРОВЕНЬ: Специя нужна, но кнопки покупки нет!
+                if (!aTag.length) {
+                    console.log(`[${username}] ⚠️ Специя "${itemName}" недоступна (не хватает уровня). Убираю из списка покупок!`);
+                    delete spiceMap[originalSpiceName]; // Вычеркиваем, чтобы бот не искал ее вечно
+                    continue; 
+                }
+
+                // Ссылка есть, уровень подходит - покупаем!
+                const buyLink = aTag.attr('href').replace('./', '/shop/');
                 currentBalance = await this.buySingleSpice(client, db, accountId, originalSpiceName, itemName, buyLink, spiceMap, username);
                 boughtSomething = true;
                 
                 if (currentBalance < this.MIN_COINS) throw new Error('LOW_BALANCE');
-                
-                // 🛑 МЫ УДАЛИЛИ BREAK ОТСЮДА!
-                // Теперь бот купит масло, пойдет дальше по списку на этой же странице
-                // и купит ванилин, уксус и т.д., пока страница не кончится!
             }
         }
 
