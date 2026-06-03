@@ -1,7 +1,6 @@
-const BaseModule = require('../core/BaseModule');
 const cheerio = require('cheerio');
 
-class SpiceBuyer extends BaseModule {
+class SpiceBuyer {
     
     static SPICE_MAPPING = {
         'Корица': 'Корицу', 'Морская соль': 'Морскую соль', 'Лимонная кислота': 'Лимонную кислоту',
@@ -19,10 +18,6 @@ class SpiceBuyer extends BaseModule {
 
     static async execute(client, db, workers) {
         if (!client || !db || !client.accountId) return;
-
-        // Проверка настройки: разрешена ли закупка (true/false)
-        const unlockSetting = db.getTimer(client.accountId, 'unlock_recipe');
-        if (unlockSetting === false || unlockSetting === 'false') return;
 
         const spiceMap = db.getSpicesToUnlock(client.accountId);
         if (Object.keys(spiceMap).length === 0) return;
