@@ -193,6 +193,11 @@ export async function fetchState() {
             const toggleEl = document.getElementById(`toggle-${mod.id}`);
             if (toggleEl && toggleEl.checked !== isEnabled) toggleEl.checked = isEnabled;
         });
+
+        // 🌶️ ДОБАВИТЬ СЮДА: Синхронизируем кнопку специй каждую секунду!
+        if (window.syncSpiceBuyerUI && State.global.unlock_recipe !== undefined) {
+            window.syncSpiceBuyerUI(State.global.unlock_recipe);
+        }
     } catch (e) {
         console.error("Ошибка обновления стейта:", e); 
         State.global = null;

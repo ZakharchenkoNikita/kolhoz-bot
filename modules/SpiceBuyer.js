@@ -125,7 +125,10 @@ class SpiceBuyer {
                 boughtSomething = true;
                 
                 if (currentBalance < this.MIN_COINS) throw new Error('LOW_BALANCE');
-                break; 
+                
+                // 🛑 МЫ УДАЛИЛИ BREAK ОТСЮДА!
+                // Теперь бот купит масло, пойдет дальше по списку на этой же странице
+                // и купит ванилин, уксус и т.д., пока страница не кончится!
             }
         }
 

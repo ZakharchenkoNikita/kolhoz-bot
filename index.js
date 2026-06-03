@@ -120,6 +120,7 @@ app.get('/api/state', (req, res) => {
         upgrade_info: db.getAccountSettings(accId, 'upgrade_info') || '', // 🛠️ Передаем текст улучшения
         heliTarget: db.getAccountSettings(accId, 'heli_target') || 'thunder_or_alt', // 🚁 ДОБАВЛЕНО: передаем стейт вертолета
         culinary_skill: db.getAccountSettings(accId, 'culinary_skill') || 'false', // 🧠 ДОБАВЛЕНО: статус умной прокачки кулинарки
+        unlock_recipe: db.getAccountSettings(accId, 'unlock_recipe') === 'true',
         nursery_tasks: JSON.parse(db.getAccountSettings(accId, 'nursery_active_tasks') || '{}'),
         profile: db.getProfile(accId),
         timers: {

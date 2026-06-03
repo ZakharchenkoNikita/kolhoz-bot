@@ -107,6 +107,31 @@ window.clearRecipeSearch = function() {
     }
 };
 
+window.syncSpiceBuyerUI = function(isBuying) {
+    const btnElement = document.querySelector('.spice-buyer-btn');
+    if (!btnElement) return;
+    
+    const iconEl = btnElement.querySelector('.spice-buyer-icon');
+    const textEl = btnElement.querySelector('.spice-buyer-text');
+    const currentlyActive = btnElement.classList.contains('active-buyer');
+
+    if (isBuying && !currentlyActive) {
+        btnElement.classList.add('active-buyer');
+        btnElement.style.backgroundColor = 'rgba(255, 69, 58, 0.15)';
+        btnElement.style.color = '#ff453a';
+        btnElement.style.borderColor = 'rgba(255, 69, 58, 0.2)';
+        if (iconEl) iconEl.innerHTML = '<rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>';
+        if (textEl) textEl.innerText = 'Остановить';
+    } else if (!isBuying && currentlyActive) {
+        btnElement.classList.remove('active-buyer');
+        btnElement.style.backgroundColor = 'rgba(10, 132, 255, 0.15)';
+        btnElement.style.color = 'var(--apple-blue)';
+        btnElement.style.borderColor = 'rgba(10, 132, 255, 0.2)';
+        if (iconEl) iconEl.innerHTML = '<circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>';
+        if (textEl) textEl.innerText = 'Закупить специи';
+    }
+};
+
 // ==========================================
 // 🛒 ТУМБЛЕР ЗАКУПКИ СПЕЦИЙ
 // ==========================================
