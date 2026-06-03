@@ -204,15 +204,25 @@ class BotEngine {
                     await LotteryModule.execute(this.client, this.db, this.workers); 
                 }
             },
-            // 🌶️ ИЗМЕНЕНО: Запуск закупки специй по кнопке (разово)
+            // 🌶️ ИЗМЕНЕНО: Читаем и пишем в правильную таблицу (Настройки)
             'spice': async () => { 
-                let isUnlockRecipeOn = (this.db.getTimer('unlock_recipe') === 'true');
+                // ЧИТАЕМ ИЗ НАСТРОЕК
+                let rawValue = this.db.getAccountSettings('unlock_recipe');
+                
+                if (rawValue && rawValue !== 'false' && rawValue !== false) {
+                    console.log(`\n--- 🕵️ ДЕБАГ СПЕЦИЙ ---`);
+                    console.log(`[DEBUG] Кнопка нажата! База отдала значение:`, rawValue, `(Тип: ${typeof rawValue})`);
+                }
+                
+                let isUnlockRecipeOn = (rawValue === 'true' || rawValue === true || rawValue === '1' || rawValue === 1);
                 
                 if (isUnlockRecipeOn) {
-                    // 🌶️ ИЗМЕНЕНО: Передаем this.db.db вместо this.db
+                    console.log(`[DEBUG] Условие пройдено. Запускаем SpiceBuyer...`);
                     await SpiceBuyerModule.execute(this.client, this.db.db, this.workers);
                     
-                    this.db.saveTimer('unlock_recipe', 'false'); 
+                    // СОХРАНЯЕМ ОБРАТНО В НАСТРОЙКИ
+                    this.db.saveAccountSettings('unlock_recipe', 'false'); 
+                    console.log(`[DEBUG] Тумблер успешно выключен обратно.\n-----------------------`);
                 }
             },
             // 📋 ДОБАВЛЕНО: Инструкция запуска для заданий
