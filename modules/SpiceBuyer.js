@@ -16,17 +16,24 @@ class SpiceBuyer {
     static MIN_COINS = 50000000;
     static PAUSE_MS = 500;
 
-    static async execute(client, db, workers) {
-        if (!client || !db || !client.accountId) return;
-
-        const spiceMap = db.getSpicesToUnlock(client.accountId);
-        if (Object.keys(spiceMap).length === 0) return;
-
-        console.log(`[${client.username}] 🌶️ Начат круговой обход магазина специй...`);
+    // ПРИНИМАЕМ accountId НАПРЯМУЮ
+    static async execute(client, db, accountId, workers) {
+        if (!client || !db || !accountId) return;
 
         try {
-            await this.runPurchaseCycles(client, db, spiceMap);
+            const spiceMap = db.getSpicesToUnlock(accountId) || {};
+            
+            console.log(`[DEBUG] 📋 Список специй к покупке из базы:`, spiceMap);
+            
+            if (Object.keys(spiceMap).length === 0) {
+                console.log(`[${client.username}] 🛑 Список специй пуст (все рецепты открыты или не хватает уровня).`);
+                return;
+            }
+
+            console.log(`[${client.username}] 🌶️ Начат круговой обход магазина специй...`);
+            await this.runPurchaseCycles(client, db, accountId, spiceMap);
             console.log(`[${client.username}] 🏁 Закупка специй завершена.`);
+            
         } catch (error) {
             if (error.message === 'LOW_BALANCE') {
                 console.log(`[${client.username}] 🛑 Покупка остановлена: баланс опустился ниже 50кк!`);
@@ -36,8 +43,7 @@ class SpiceBuyer {
         }
     }
 
-    // Круговой обход страниц, пока не кончатся специи или монеты
-    static async runPurchaseCycles(client, db, spiceMap) {
+    static async runPurchaseCycles(client, db, accountId, spiceMap) {
         let needsAnotherRound = true;
         let currentBalance = Infinity;
 
@@ -47,7 +53,7 @@ class SpiceBuyer {
             let hasMorePages = true;
 
             while (hasMorePages && Object.keys(spiceMap).length > 0) {
-                const result = await this.processShopPage(client, db, page, spiceMap);
+                const result = await this.processShopPage(client, db, accountId, page, spiceMap);
                 
                 currentBalance = result.balance;
                 if (currentBalance < this.MIN_COINS) throw new Error('LOW_BALANCE');
@@ -59,8 +65,7 @@ class SpiceBuyer {
         }
     }
 
-    // Обработка одной страницы магазина
-    static async processShopPage(client, db, page, spiceMap) {
+    static async processShopPage(client, db, accountId, page, spiceMap) {
         const url = `/shop/additions?warehousePage=true&page=${page}`;
         const res = await client.get(url);
         
@@ -89,7 +94,7 @@ class SpiceBuyer {
             const originalSpiceName = this.findOriginalSpiceName(itemName);
             
             if (originalSpiceName && spiceMap[originalSpiceName]) {
-                currentBalance = await this.buySingleSpice(client, db, originalSpiceName, itemName, buyLink, spiceMap);
+                currentBalance = await this.buySingleSpice(client, db, accountId, originalSpiceName, itemName, buyLink, spiceMap);
                 boughtSomething = true;
                 
                 if (currentBalance < this.MIN_COINS) throw new Error('LOW_BALANCE');
@@ -100,11 +105,10 @@ class SpiceBuyer {
         return { balance: currentBalance, boughtSomething, hasMorePages };
     }
 
-    // Покупка конкретной специи и проверка успеха
-    static async buySingleSpice(client, db, spiceName, shopName, buyLink, spiceMap) {
+    static async buySingleSpice(client, db, accountId, spiceName, shopName, buyLink, spiceMap) {
         await new Promise(r => setTimeout(r, this.PAUSE_MS));
         
-        console.log(`[${client.username}] 🛒 Покупаем: ${shopName} (круг)`);
+        console.log(`[${client.username}] 🛒 Покупаем: ${shopName}...`);
         const buyRes = await client.get(buyLink);
         
         if (!buyRes || !buyRes.data) return Infinity;
@@ -116,14 +120,11 @@ class SpiceBuyer {
         if (unlockedRecipe) {
             console.log(`[${client.username}] 🎉 ОТКРЫТИЕ: Разблокирован рецепт "${unlockedRecipe}"! (Специя: ${spiceName})`);
             
-            db.addUnlockedRecipe(client.accountId, unlockedRecipe);
-            this.logSuccess(db, client.accountId, spiceName, unlockedRecipe);
+            db.addUnlockedRecipe(accountId, unlockedRecipe);
+            this.logSuccess(db, accountId, spiceName, unlockedRecipe);
 
             spiceMap[spiceName] = spiceMap[spiceName].filter(r => r !== unlockedRecipe);
-
-            if (spiceMap[spiceName].length === 0) {
-                delete spiceMap[spiceName];
-            }
+            if (spiceMap[spiceName].length === 0) delete spiceMap[spiceName];
         }
 
         return balance;
@@ -159,11 +160,13 @@ class SpiceBuyer {
             const today = new Date().toLocaleDateString('ru-RU');
             const key = `opened_recipes_${today}`;
             
-            let currentLogStr = db.getTimer(accountId, key);
-            let currentLog = {};
+            // Запрашиваем через оригинальный метод sqlite из db
+            const stmt = db.db.prepare(`SELECT value FROM account_timers WHERE account_id = ? AND module = ?`);
+            const row = stmt.get(accountId, key);
             
-            if (currentLogStr && typeof currentLogStr === 'string') {
-                try { currentLog = JSON.parse(currentLogStr); } catch(e) {}
+            let currentLog = {};
+            if (row && row.value) {
+                try { currentLog = JSON.parse(row.value); } catch(e) {}
             }
             
             if (!currentLog[spiceName]) currentLog[spiceName] = [];
@@ -171,9 +174,10 @@ class SpiceBuyer {
                 currentLog[spiceName].push(recipeName);
             }
             
-            db.saveTimer(accountId, key, JSON.stringify(currentLog));
+            const updateStmt = db.db.prepare(`INSERT INTO account_timers (account_id, module, value) VALUES (?, ?, ?) ON CONFLICT(account_id, module) DO UPDATE SET value = excluded.value`);
+            updateStmt.run(accountId, key, JSON.stringify(currentLog));
         } catch (e) {
-            // Игнорируем ошибки
+            // Игнорируем ошибки логирования
         }
     }
 }

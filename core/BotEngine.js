@@ -218,7 +218,7 @@ class BotEngine {
                 
                 if (isUnlockRecipeOn) {
                     console.log(`[DEBUG] Условие пройдено. Запускаем SpiceBuyer...`);
-                    await SpiceBuyerModule.execute(this.client, this.db.db, this.workers);
+                    await SpiceBuyerModule.execute(this.client, this.db.db, this.accountId, this.workers);
                     
                     // СОХРАНЯЕМ ОБРАТНО В НАСТРОЙКИ
                     this.db.saveAccountSettings('unlock_recipe', 'false'); 
