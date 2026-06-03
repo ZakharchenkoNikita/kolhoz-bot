@@ -14,6 +14,9 @@ class SpiceBuyer {
     static MIN_COINS = 50000000;
     static PAUSE_MS = 600;
 
+    // 🧠 ПАМЯТЬ БОТА: Здесь он запоминает, на какой странице остановился
+    static shopState = {};
+
     static async execute(client, db, accountId, workers) {
         if (!client || !db || !accountId) return;
 
@@ -26,70 +29,68 @@ class SpiceBuyer {
         try {
             const spiceMap = db.getSpicesToUnlock(accountId) || {};
             
-            // Если рецептов больше нет — САМИ ВЫКЛЮЧАЕМ ТУМБЛЕР
+            // Если рецептов нет — сбрасываем память и выключаем тумблер
             if (Object.keys(spiceMap).length === 0) {
-                console.log(`[${username}] ✅ Все нужные рецепты открыты! Выключаю тумблер закупки.`);
+                console.log(`[${username}] ✅ Все нужные рецепты открыты! Выключаю закупку.`);
                 db.saveAccountSettings(accountId, 'unlock_recipe', 'false');
+                this.shopState[accountId] = 0;
                 return;
             }
 
-            console.log(`[${username}] 🌶️ Начинаю 1 круг закупки специй...`);
+            // Инициализируем страницу (начинаем с 0, если памяти нет)
+            if (this.shopState[accountId] === undefined) {
+                this.shopState[accountId] = 0;
+            }
             
-            // Делаем ровно 1 проход, чтобы не блокировать Ферму и Ранчо
-            await this.runOnePurchaseCycle(client, db, accountId, spiceMap, username);
+            let currentPage = this.shopState[accountId];
             
-            // Снова проверяем, остались ли специи после этого круга
-            const remaining = db.getSpicesToUnlock(accountId) || {};
-            if (Object.keys(remaining).length === 0) {
-                console.log(`[${username}] 🏁 Закупка специй успешно завершена! Выключаю тумблер.`);
-                db.saveAccountSettings(accountId, 'unlock_recipe', 'false');
+            // Сканируем РОВНО ОДНУ СТРАНИЦУ за тик
+            const result = await this.processSinglePage(client, db, accountId, currentPage, spiceMap, username);
+
+            if (result.boughtSomething) {
+                console.log(`[${username}] ⏳ Купил специю. Уступаю очередь другим модулям!`);
+                // Страницу не меняем — вдруг там есть еще специи, проверим на следующем тике
+            } else if (result.hasMorePages) {
+                console.log(`[${username}] ⏭️ Страница ${currentPage + 1} пуста. Уступаю очередь...`);
+                this.shopState[accountId]++; // Запоминаем следующую страницу
             } else {
-                console.log(`[${username}] ⏳ Круг завершен. Уступаю очередь Ферме/Ранчо...`);
+                console.log(`[${username}] 🏁 Конец магазина. Начинаю поиск с начала.`);
+                this.shopState[accountId] = 0; // Сбрасываем на первую
             }
             
         } catch (error) {
             if (error.message === 'LOW_BALANCE') {
-                console.log(`[${username}] 🛑 Покупка остановлена: баланс опустился ниже 50кк! Выключаю тумблер.`);
+                console.log(`[${username}] 🛑 Покупка остановлена: баланс ниже 50кк!`);
                 db.saveAccountSettings(accountId, 'unlock_recipe', 'false');
+                this.shopState[accountId] = 0;
             } else {
-                console.error(`[${username}] ❌ Ошибка в модуле SpiceBuyer:`, error.message);
+                console.error(`[${username}] ❌ Ошибка в SpiceBuyer:`, error.message);
             }
         }
     }
 
-    // ИЗМЕНЕНО: Теперь здесь нет бесконечного while (needsAnotherRound)
-    static async runOnePurchaseCycle(client, db, accountId, spiceMap, username) {
-        let page = 0;
-        let hasMorePages = true;
-        let currentBalance = Infinity;
-
-        while (hasMorePages && Object.keys(spiceMap).length > 0 && currentBalance >= this.MIN_COINS) {
-            const result = await this.processShopPage(client, db, accountId, page, spiceMap, username);
-            
-            currentBalance = result.balance;
-            if (currentBalance < this.MIN_COINS) throw new Error('LOW_BALANCE');
-
-            hasMorePages = result.hasMorePages;
-            page++;
-        }
-    }
-
-    static async processShopPage(client, db, accountId, page, spiceMap, username) {
+    static async processSinglePage(client, db, accountId, page, spiceMap, username) {
         const url = `/shop/additions?warehousePage=true&page=${page}`;
         
         const $ = await client.fetchHtml(url);
-        if (!$) return { balance: Infinity, hasMorePages: false };
+        if (!$) return { boughtSomething: false, hasMorePages: false };
 
         let currentBalance = this.parseBalance($);
-        if (currentBalance < this.MIN_COINS) {
-            return { balance: currentBalance, hasMorePages: false };
-        }
+        if (currentBalance < this.MIN_COINS) throw new Error('LOW_BALANCE');
 
         const items = $('li');
-        if (items.length === 0) return { balance: currentBalance, hasMorePages: false };
+        if (items.length === 0) return { boughtSomething: false, hasMorePages: false };
+
+        let boughtSomething = false;
 
         for (let i = 0; i < items.length; i++) {
             if (Object.keys(spiceMap).length === 0) break;
+
+            // Экстренная проверка кнопки перед покупкой
+            let checkToggle = db.getAccountSettings(accountId, 'unlock_recipe');
+            if (checkToggle === 'false' || checkToggle === false) {
+                return { boughtSomething: false, hasMorePages: false }; 
+            }
 
             const aTag = $(items[i]).find('a[href*="buyLink"]');
             if (!aTag.length) continue;
@@ -100,33 +101,32 @@ class SpiceBuyer {
             
             if (originalSpiceName && spiceMap[originalSpiceName]) {
                 currentBalance = await this.buySingleSpice(client, db, accountId, originalSpiceName, itemName, buyLink, spiceMap, username);
+                boughtSomething = true;
+                
+                // ВАЖНО: Покупаем только 1 вещь за тик и выходим (break), чтобы не тормозить ядро!
                 if (currentBalance < this.MIN_COINS) throw new Error('LOW_BALANCE');
+                break; 
             }
         }
 
         const hasMorePages = $('.pag').filter((_, el) => $(el).text().includes('>')).length > 0;
-        return { balance: currentBalance, hasMorePages };
+        return { boughtSomething, hasMorePages };
     }
 
     static async buySingleSpice(client, db, accountId, spiceName, shopName, buyLink, spiceMap, username) {
         await new Promise(r => setTimeout(r, this.PAUSE_MS));
-        
         console.log(`[${username}] 🛒 Покупаем: ${shopName}...`);
         
         const buy$ = await client.fetchHtml(buyLink);
         if (!buy$) return Infinity;
 
         const balance = this.parseBalance(buy$);
-        
         const unlockedRecipe = this.checkSuccess(buy$);
+        
         if (unlockedRecipe) {
             console.log(`[${username}] 🎉 ОТКРЫТИЕ: Разблокирован рецепт "${unlockedRecipe}"! (Специя: ${spiceName})`);
-            
             db.addUnlockedRecipe(accountId, unlockedRecipe);
             this.logSuccess(db, accountId, spiceName, unlockedRecipe);
-
-            spiceMap[spiceName] = spiceMap[spiceName].filter(r => r !== unlockedRecipe);
-            if (spiceMap[spiceName].length === 0) delete spiceMap[spiceName];
         }
 
         return balance;
@@ -139,13 +139,11 @@ class SpiceBuyer {
 
     static checkSuccess($) {
         const html = $.html(); 
-        
         const newMatch = html.match(/Вы узнали новый рецепт:\s*<span class="title">([^<]+)<\/span>/i);
         if (newMatch) return newMatch[1];
 
         const levelMatch = html.match(/составляющие этого рецепта \(<span class="title">([^<]+)<\/span>\)\s*требуется/i);
         if (levelMatch) return levelMatch[1];
-
         return null;
     }
 
@@ -161,7 +159,6 @@ class SpiceBuyer {
         try {
             const today = new Date().toLocaleDateString('ru-RU');
             const key = `opened_recipes_${today}`;
-            
             const stmt = db.db.prepare(`SELECT value FROM account_timers WHERE account_id = ? AND module = ?`);
             const row = stmt.get(accountId, key);
             
@@ -171,9 +168,7 @@ class SpiceBuyer {
             }
             
             if (!currentLog[spiceName]) currentLog[spiceName] = [];
-            if (!currentLog[spiceName].includes(recipeName)) {
-                currentLog[spiceName].push(recipeName);
-            }
+            if (!currentLog[spiceName].includes(recipeName)) currentLog[spiceName].push(recipeName);
             
             const updateStmt = db.db.prepare(`INSERT INTO account_timers (account_id, module, value) VALUES (?, ?, ?) ON CONFLICT(account_id, module) DO UPDATE SET value = excluded.value`);
             updateStmt.run(accountId, key, JSON.stringify(currentLog));
