@@ -1,5 +1,3 @@
-const cheerio = require('cheerio');
-
 class SpiceBuyer {
     
     static SPICE_MAPPING = {
@@ -14,36 +12,40 @@ class SpiceBuyer {
     };
 
     static MIN_COINS = 50000000;
-    static PAUSE_MS = 500;
+    static PAUSE_MS = 600;
 
-    // ПРИНИМАЕМ accountId НАПРЯМУЮ
     static async execute(client, db, accountId, workers) {
         if (!client || !db || !accountId) return;
+
+        // Достаем красивое имя профиля для логов
+        let username = accountId;
+        try {
+            const profile = db.getProfile(accountId);
+            if (profile && profile.username) username = profile.username;
+        } catch (e) {}
 
         try {
             const spiceMap = db.getSpicesToUnlock(accountId) || {};
             
-            console.log(`[DEBUG] 📋 Список специй к покупке из базы:`, spiceMap);
-            
             if (Object.keys(spiceMap).length === 0) {
-                console.log(`[${client.username}] 🛑 Список специй пуст (все рецепты открыты или не хватает уровня).`);
+                console.log(`[${username}] 🛑 Список специй пуст (все рецепты открыты).`);
                 return;
             }
 
-            console.log(`[${client.username}] 🌶️ Начат круговой обход магазина специй...`);
-            await this.runPurchaseCycles(client, db, accountId, spiceMap);
-            console.log(`[${client.username}] 🏁 Закупка специй завершена.`);
+            console.log(`[${username}] 🌶️ Начат круговой обход магазина специй...`);
+            await this.runPurchaseCycles(client, db, accountId, spiceMap, username);
+            console.log(`[${username}] 🏁 Закупка специй завершена.`);
             
         } catch (error) {
             if (error.message === 'LOW_BALANCE') {
-                console.log(`[${client.username}] 🛑 Покупка остановлена: баланс опустился ниже 50кк!`);
+                console.log(`[${username}] 🛑 Покупка остановлена: баланс опустился ниже 50кк!`);
             } else {
-                console.error(`[${client.username}] ❌ Ошибка в модуле SpiceBuyer:`, error.message);
+                console.error(`[${username}] ❌ Ошибка в модуле SpiceBuyer:`, error.message);
             }
         }
     }
 
-    static async runPurchaseCycles(client, db, accountId, spiceMap) {
+    static async runPurchaseCycles(client, db, accountId, spiceMap, username) {
         let needsAnotherRound = true;
         let currentBalance = Infinity;
 
@@ -53,7 +55,7 @@ class SpiceBuyer {
             let hasMorePages = true;
 
             while (hasMorePages && Object.keys(spiceMap).length > 0) {
-                const result = await this.processShopPage(client, db, accountId, page, spiceMap);
+                const result = await this.processShopPage(client, db, accountId, page, spiceMap, username);
                 
                 currentBalance = result.balance;
                 if (currentBalance < this.MIN_COINS) throw new Error('LOW_BALANCE');
@@ -65,15 +67,14 @@ class SpiceBuyer {
         }
     }
 
-    static async processShopPage(client, db, accountId, page, spiceMap) {
+    static async processShopPage(client, db, accountId, page, spiceMap, username) {
         const url = `/shop/additions?warehousePage=true&page=${page}`;
-        const res = await client.get(url);
         
-        if (!res || !res.data) return { balance: Infinity, boughtSomething: false, hasMorePages: false };
+        // 🛠️ ИСПОЛЬЗУЕМ ТВОЙ ФИРМЕННЫЙ МЕТОД FETCH
+        const $ = await client.fetchHtml(url);
+        if (!$) return { balance: Infinity, boughtSomething: false, hasMorePages: false };
 
-        const $ = cheerio.load(res.data);
         let currentBalance = this.parseBalance($);
-        
         if (currentBalance < this.MIN_COINS) {
             return { balance: currentBalance, boughtSomething: false, hasMorePages: false };
         }
@@ -94,7 +95,7 @@ class SpiceBuyer {
             const originalSpiceName = this.findOriginalSpiceName(itemName);
             
             if (originalSpiceName && spiceMap[originalSpiceName]) {
-                currentBalance = await this.buySingleSpice(client, db, accountId, originalSpiceName, itemName, buyLink, spiceMap);
+                currentBalance = await this.buySingleSpice(client, db, accountId, originalSpiceName, itemName, buyLink, spiceMap, username);
                 boughtSomething = true;
                 
                 if (currentBalance < this.MIN_COINS) throw new Error('LOW_BALANCE');
@@ -105,20 +106,20 @@ class SpiceBuyer {
         return { balance: currentBalance, boughtSomething, hasMorePages };
     }
 
-    static async buySingleSpice(client, db, accountId, spiceName, shopName, buyLink, spiceMap) {
+    static async buySingleSpice(client, db, accountId, spiceName, shopName, buyLink, spiceMap, username) {
         await new Promise(r => setTimeout(r, this.PAUSE_MS));
         
-        console.log(`[${client.username}] 🛒 Покупаем: ${shopName}...`);
-        const buyRes = await client.get(buyLink);
+        console.log(`[${username}] 🛒 Покупаем: ${shopName}...`);
         
-        if (!buyRes || !buyRes.data) return Infinity;
+        // 🛠️ ИСПОЛЬЗУЕМ ТВОЙ ФИРМЕННЫЙ МЕТОД FETCH
+        const buy$ = await client.fetchHtml(buyLink);
+        if (!buy$) return Infinity;
 
-        const buy$ = cheerio.load(buyRes.data);
         const balance = this.parseBalance(buy$);
         
         const unlockedRecipe = this.checkSuccess(buy$);
         if (unlockedRecipe) {
-            console.log(`[${client.username}] 🎉 ОТКРЫТИЕ: Разблокирован рецепт "${unlockedRecipe}"! (Специя: ${spiceName})`);
+            console.log(`[${username}] 🎉 ОТКРЫТИЕ: Разблокирован рецепт "${unlockedRecipe}"! (Специя: ${spiceName})`);
             
             db.addUnlockedRecipe(accountId, unlockedRecipe);
             this.logSuccess(db, accountId, spiceName, unlockedRecipe);
@@ -136,7 +137,7 @@ class SpiceBuyer {
     }
 
     static checkSuccess($) {
-        const html = $.html();
+        const html = $.html(); // Извлекаем HTML из объекта cheerio
         
         const newMatch = html.match(/Вы узнали новый рецепт:\s*<span class="title">([^<]+)<\/span>/i);
         if (newMatch) return newMatch[1];
@@ -160,7 +161,6 @@ class SpiceBuyer {
             const today = new Date().toLocaleDateString('ru-RU');
             const key = `opened_recipes_${today}`;
             
-            // Запрашиваем через оригинальный метод sqlite из db
             const stmt = db.db.prepare(`SELECT value FROM account_timers WHERE account_id = ? AND module = ?`);
             const row = stmt.get(accountId, key);
             
@@ -176,9 +176,7 @@ class SpiceBuyer {
             
             const updateStmt = db.db.prepare(`INSERT INTO account_timers (account_id, module, value) VALUES (?, ?, ?) ON CONFLICT(account_id, module) DO UPDATE SET value = excluded.value`);
             updateStmt.run(accountId, key, JSON.stringify(currentLog));
-        } catch (e) {
-            // Игнорируем ошибки логирования
-        }
+        } catch (e) {}
     }
 }
 
