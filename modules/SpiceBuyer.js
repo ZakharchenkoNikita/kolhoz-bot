@@ -137,7 +137,8 @@ class SpiceBuyer {
             }
         }
 
-        const hasMorePages = $('.pag').filter((_, el) => $(el).text().includes('>')).length > 0;
+        // 🛠️ ИСПРАВЛЕНИЕ: Ищем '>' только внутри активных ссылок (a.pag), а не в span
+        const hasMorePages = $('a.pag').filter((_, el) => $(el).text().includes('>')).length > 0;
         return { boughtSomething, hasMorePages };
     }
 
