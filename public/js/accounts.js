@@ -125,8 +125,11 @@ export async function toggleAccountStatus(id, is_active) {
 }
 
 export async function loadAccounts() {
-    const listContainer = document.getElementById('accounts-list');
-    listContainer.innerHTML = '<div style="padding: 10px; color: var(--text-muted);">Загрузка...</div>';
+    const groupsContainer = document.getElementById('groups-list');
+    const accountsContainer = document.getElementById('accounts-list');
+    
+    if (groupsContainer) groupsContainer.innerHTML = '<div style="padding: 10px; color: var(--text-muted);">Загрузка...</div>';
+    if (accountsContainer) accountsContainer.innerHTML = '<div style="padding: 10px; color: var(--text-muted);">Загрузка...</div>';
 
     // Запрашиваем параллельно
     const [resGroups, resAccounts] = await Promise.all([
@@ -135,53 +138,59 @@ export async function loadAccounts() {
     ]);
     const groups = await resGroups.json();
     const accounts = await resAccounts.json();
-    
-    listContainer.innerHTML = '';
 
-    if (groups.length === 0 && accounts.length === 0) {
-        listContainer.innerHTML = `<div style="padding: 14px 18px; color: var(--text-muted); font-size: 14px; text-align: center;">Ничего не найдено</div>`;
-        return;
+    // 1. Рендер кооперативов (отдельный контейнер)
+    if (groupsContainer) {
+        groupsContainer.innerHTML = '';
+        if (groups.length === 0) {
+            groupsContainer.innerHTML = `<div style="padding: 14px 20px; color: var(--text-muted); font-size: 14px;">Нет кооперативов</div>`;
+        } else {
+            groups.forEach(group => {
+                const row = document.createElement('div');
+                row.className = 'kb-ios-row';
+                row.innerHTML = `
+                    <div class="kb-ios-icon-wrap">
+                        <span style="font-size:20px; margin-right:8px;">👥</span>
+                        <span style="font-weight:600; color:var(--apple-green);">${group.name}</span>
+                    </div>
+                    <button onclick="window.deleteGroupCustom(${group.id}); window.loadAccounts();" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                `;
+                groupsContainer.appendChild(row);
+            });
+        }
     }
 
-    // 1. Рендер групп
-    groups.forEach(group => {
-        const row = document.createElement('div');
-        row.className = 'kb-ios-row';
-        row.innerHTML = `
-            <div class="kb-ios-icon-wrap">
-                <span style="font-size:20px; margin-right:8px;">👥</span>
-                <span style="font-weight:600; color:var(--apple-green);">${group.name}</span>
-            </div>
-            <button onclick="window.deleteGroupCustom(${group.id}); window.loadAccounts();" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-            </button>
-        `;
-        listContainer.appendChild(row);
-    });
-
-    // Разделитель
-    if (groups.length > 0 && accounts.length > 0) {
-        const sep = document.createElement('div');
-        sep.style.cssText = "height: 1px; background: var(--glass-border); margin: 0 20px;";
-        listContainer.appendChild(sep);
+    // 2. Рендер аккаунтов (отдельный контейнер + ВОЗВРАЩЕНЫ ТУМБЛЕРЫ)
+    if (accountsContainer) {
+        accountsContainer.innerHTML = '';
+        if (accounts.length === 0) {
+            accountsContainer.innerHTML = `<div style="padding: 14px 20px; color: var(--text-muted); font-size: 14px;">Нет аккаунтов</div>`;
+        } else {
+            accounts.forEach(acc => {
+                let nameColor = acc.is_active ? 'white' : 'var(--text-muted)';
+                const row = document.createElement('div');
+                row.className = 'kb-ios-row';
+                row.innerHTML = `
+                    <div class="kb-ios-icon-wrap">
+                        <span style="font-size:20px; margin-right:8px;">👤</span>
+                        <span style="font-weight:600; color: ${nameColor};">${acc.username}</span>
+                    </div>
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <label class="ios-switch" style="transform: scale(0.8); margin: 0;">
+                            <input type="checkbox" ${acc.is_active ? 'checked' : ''} onchange="window.toggleAccountStatus(${acc.id}, this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                        <button onclick="window.deleteAccount(${acc.id})" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                    </div>
+                `;
+                accountsContainer.appendChild(row);
+            });
+        }
     }
-
-    // 2. Рендер аккаунтов
-    accounts.forEach(acc => {
-        let nameColor = acc.is_active ? 'white' : 'var(--text-muted)';
-        const row = document.createElement('div');
-        row.className = 'kb-ios-row';
-        row.innerHTML = `
-            <div class="kb-ios-icon-wrap">
-                <span style="font-size:20px; margin-right:8px;">👤</span>
-                <span style="font-weight:600; color: ${nameColor};">${acc.username}</span>
-            </div>
-            <button onclick="window.deleteAccount(${acc.id})" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-            </button>
-        `;
-        listContainer.appendChild(row);
-    });
 }
 
 export async function addNewAccount() {
