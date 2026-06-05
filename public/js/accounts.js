@@ -39,7 +39,6 @@ export async function initAccountsDropdown() {
             
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 16px;">👥</span>
                     ${group.name}
                 </div>
                 <button onclick="event.stopPropagation(); window.deleteGroupCustom(${group.id})" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Распустить кооператив">
@@ -71,8 +70,7 @@ export async function initAccountsDropdown() {
             item.onclick = () => window.changeAccountCustom(acc.id);
             item.innerHTML = `
                 <div style="font-weight:600; font-size: 15px; color: ${nameColor}; display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 16px;">👤</span>
-                    ${acc.username}
+                    <span style="color: var(--text-muted); font-size: 13px;">#${acc.id}</span> ${acc.username}
                 </div>
                 <div style="display:flex; gap:8px;" onclick="event.stopPropagation()">
                     <label class="ios-switch" style="transform: scale(0.7); margin: 0;">
@@ -183,15 +181,17 @@ export async function loadAccounts() {
                 row.className = 'kb-ios-row';
                 row.innerHTML = `
                     <div class="kb-ios-icon-wrap" style="flex-direction: column; align-items: flex-start; gap: 2px;">
-                        <span style="font-weight:600; color: ${nameColor};">${acc.username}</span>
-                        <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">${groupName}</span>
-                    </div>
-                    <div style="display:flex; gap:12px; align-items:center;">
-                        <label class="ios-switch" style="transform: scale(0.8); margin: 0;">
-                            <input type="checkbox" ${acc.is_active ? 'checked' : ''} onchange="window.toggleAccountStatus(${acc.id}, this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                        <button onclick="window.openGroupSelector(${acc.id})" style="background:none; border:none; color:var(--apple-blue); cursor:pointer; padding:0; display:flex;" title="Привязать к кооперативу">
+                            <span style="font-weight:600; color: ${nameColor};">
+                                <span style="color: var(--text-muted); font-size: 12px; margin-right: 4px;">#${acc.id}</span>${acc.username}
+                            </span>
+                            <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">${groupName}</span>
+                        </div>
+                        <div style="display:flex; gap:12px; align-items:center;">
+                            <label class="ios-switch" style="transform: scale(0.8); margin: 0;">
+                                <input type="checkbox" ${acc.is_active ? 'checked' : ''} onchange="window.toggleAccountStatus(${acc.id}, this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                            <button onclick="event.stopPropagation(); window.openGroupSelector(${acc.id})" style="background:none; border:none; color:var(--apple-blue); cursor:pointer; padding:0; display:flex;" title="Привязать к кооперативу">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
                         </button>
                         <button onclick="window.deleteAccount(${acc.id})" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
