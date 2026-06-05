@@ -1,6 +1,6 @@
 import { State } from './state.js';
 import { VectorIcons, MaterialIcons, MaterialNames, modulesConfig, formatTime, getRingPercent, getModuleActionText } from './utils.js';
-import { fetchRecipesData, scanRecipeBook, setSpiceBuyerStatus } from './api.js';
+import { fetchRecipesData, scanRecipeBook, setSpiceBuyerStatus, createGroup } from './api.js';
 
 // ==========================================
 // 1. КЭШ DOM-ЭЛЕМЕНТОВ (Для молниеносного рендера)
@@ -201,6 +201,31 @@ window.clickRecipeTag = function(searchText, event) {
         if (modalBody) {
             modalBody.scrollTo({ top: 0, behavior: 'smooth' });
         }
+    }
+};
+
+// ==========================================
+// 👥 СОЗДАНИЕ НОВОГО КООПЕРАТИВА (ГРУППЫ)
+// ==========================================
+window.createNewGroup = async function() {
+    const input = document.getElementById('group_name');
+    if (!input || !input.value.trim()) {
+        alert("Введите название кооператива!");
+        return;
+    }
+
+    try {
+        const res = await createGroup(input.value.trim());
+        if (res.success) {
+            input.value = '';
+            alert("Кооператив успешно создан!");
+            // Позже мы добавим сюда функцию обновления списка в меню
+        } else {
+            alert("Ошибка! Возможно, такое название уже существует.");
+        }
+    } catch (e) {
+        console.error("Ошибка при создании группы:", e);
+        alert("Не удалось связаться с сервером.");
     }
 };
 
