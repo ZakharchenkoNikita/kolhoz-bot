@@ -219,6 +219,7 @@ window.createNewGroup = async function() {
         if (res.success) {
             input.value = '';
             alert("Кооператив успешно создан!");
+            window.initAccountsDropdown();
             // Позже мы добавим сюда функцию обновления списка в меню
         } else {
             alert("Ошибка! Возможно, такое название уже существует.");

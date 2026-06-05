@@ -3,54 +3,108 @@ import { initDashboard } from './ui.js';
 import { fetchState } from './api.js';
 
 export async function initAccountsDropdown() {
-    const response = await fetch('/api/accounts');
-    const accounts = await response.json();
-    const listHtml = document.getElementById('dropdown-accounts-list');
+    // 1. Запрашиваем параллельно и группы, и аккаунты для скорости
+    const [resGroups, resAccounts] = await Promise.all([
+        fetch('/api/groups'),
+        fetch('/api/accounts')
+    ]);
+    const groups = await resGroups.json();
+    const accounts = await resAccounts.json();
     
+    const listHtml = document.getElementById('dropdown-accounts-list');
     listHtml.innerHTML = '';
 
-    if (accounts.length === 0) {
+    if (groups.length === 0 && accounts.length === 0) {
         State.accountId = null;
-        listHtml.innerHTML = `<div style="padding: 14px 18px; color: var(--text-muted); font-size: 14px; text-align: center;">Нет аккаунтов</div>`;
+        State.groupId = null;
+        listHtml.innerHTML = `<div style="padding: 14px 18px; color: var(--text-muted); font-size: 14px; text-align: center;">Нет данных</div>`;
         document.getElementById('header-nickname').innerText = 'Добавьте аккаунт';
         fetchState();
         return;
     }
 
-    let accountFound = false;
+    // --- 2. РЕНДЕР КООПЕРАТИВОВ ---
+    if (groups.length > 0) {
+        const groupHeader = document.createElement('div');
+        groupHeader.className = 'kb-dropdown-header';
+        groupHeader.innerText = 'Кооперативы';
+        listHtml.appendChild(groupHeader);
 
-    accounts.forEach(acc => {
-        if (acc.id == State.accountId) accountFound = true;
-        
-        let isActiveAcc = (acc.id == State.accountId);
-        let nameColor = acc.is_active ? 'white' : 'var(--text-muted)';
-        
-        const item = document.createElement('div');
-        item.className = `kb-dropdown-item ${isActiveAcc ? 'active-acc' : ''}`;
-        item.onclick = () => window.changeAccountCustom(acc.id);
-        item.innerHTML = `
-            <div style="font-weight:600; font-size:16px; color:${nameColor}; letter-spacing: -0.2px;">${acc.username}</div>
-            <label class="ios-switch" onclick="event.stopPropagation()">
-                <input type="checkbox" onchange="window.toggleAccountStatus(${acc.id}, this.checked)" ${acc.is_active ? 'checked' : ''}>
-                <span class="slider"></span>
-            </label>
-        `;
-        listHtml.appendChild(item);
-    });
-
-    if (!accountFound) {
-        State.accountId = accounts[0].id;
-        initAccountsDropdown(); 
-        return;
+        groups.forEach(group => {
+            let isActiveGroup = (group.id == State.groupId);
+            
+            const item = document.createElement('div');
+            item.className = `kb-dropdown-item group-item ${isActiveGroup ? 'active-acc' : ''}`;
+            item.onclick = () => window.changeGroupCustom(group.id, group.name);
+            
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 16px;">👥</span>
+                    ${group.name}
+                </div>
+                <button onclick="event.stopPropagation(); window.deleteGroupCustom(${group.id})" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Распустить кооператив">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+            `;
+            listHtml.appendChild(item);
+        });
     }
+
+    // --- 3. РЕНДЕР АККАУНТОВ ---
+    let accountFound = false;
     
-    fetchState();
+    if (accounts.length > 0) {
+        const accHeader = document.createElement('div');
+        accHeader.className = 'kb-dropdown-header';
+        accHeader.innerText = 'Аккаунты';
+        listHtml.appendChild(accHeader);
+
+        accounts.forEach(acc => {
+            if (acc.id == State.accountId) accountFound = true;
+            
+            // Аккаунт подсвечивается только если НЕ выбрана группа
+            let isActiveAcc = (acc.id == State.accountId && !State.groupId);
+            let nameColor = acc.is_active ? 'white' : 'var(--text-muted)';
+            
+            const item = document.createElement('div');
+            item.className = `kb-dropdown-item ${isActiveAcc ? 'active-acc' : ''}`;
+            item.onclick = () => window.changeAccountCustom(acc.id);
+            item.innerHTML = `
+                <div style="font-weight:600; font-size: 15px; color: ${nameColor}; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 16px;">👤</span>
+                    ${acc.username}
+                </div>
+                <div style="display:flex; gap:8px;" onclick="event.stopPropagation()">
+                    <label class="ios-switch" style="transform: scale(0.7); margin: 0;">
+                        <input type="checkbox" ${acc.is_active ? 'checked' : ''} onchange="window.toggleAccountStatus(${acc.id}, this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                    <button onclick="window.deleteAccount(${acc.id})" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                </div>
+            `;
+            listHtml.appendChild(item);
+        });
+    }
+
+    // Если ничего не выбрано (или удалили текущий) — берем первого бота
+    if (!accountFound && !State.groupId && accounts.length > 0) {
+        State.accountId = accounts[0].id;
+        document.getElementById('header-nickname').innerText = `👤 ${accounts[0].username}`;
+        fetchState();
+    } else if (accountFound && !State.groupId) {
+        const currAcc = accounts.find(a => a.id == State.accountId);
+        if (currAcc) document.getElementById('header-nickname').innerText = `👤 ${currAcc.username}`;
+    }
 }
 
 export async function changeAccountCustom(id) {
-    if (State.accountId == id) return;
+    // ➕ Прерываем только если это тот же аккаунт И мы сейчас не в группе
+    if (State.accountId == id && !State.groupId) return;
     
     State.accountId = id;
+    State.groupId = null; // ➕ Сбрасываем группу при переключении на бота
     State.priorities = []; 
     
     document.getElementById('account-dropdown-menu').classList.remove('active');
@@ -141,4 +195,39 @@ export async function deleteAccount(id) {
         body: JSON.stringify({ id })
     });
     loadAccounts();
+}
+
+export async function deleteGroupCustom(id) {
+    if (!confirm('Удалить кооператив? Аккаунты останутся, но будут отвязаны от группы.')) return;
+    
+    await fetch('/api/groups/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+    });
+    
+    if (State.groupId == id) State.groupId = null;
+    initAccountsDropdown();
+}
+
+export function changeGroupCustom(id, name) {
+    State.groupId = id;
+    State.accountId = null; // Сбрасываем выбранный одиночный аккаунт
+    
+    document.getElementById('header-nickname').innerText = `👥 ${name}`;
+    document.getElementById('account-dropdown-menu').classList.remove('active');
+    document.getElementById('account-chevron').classList.remove('open');
+    
+    // Перерисовываем список, чтобы подсветить активную группу синим фоном
+    initAccountsDropdown();
+    
+    // ВРЕМЕННАЯ ЗАГЛУШКА: Очищаем дашборд одиночного бота
+    const container = document.getElementById('modules-container');
+    container.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; color: var(--apple-green); padding: 50px; font-size: 20px; font-weight: 600; border: 1px dashed var(--glass-border); border-radius: 20px;">
+            Выбран кооператив: ${name}<br>
+            <span style="font-size: 14px; color: var(--text-muted); font-weight: normal;">Интерфейс управления группой (Штаб) скоро появится здесь...</span>
+        </div>
+    `;
+    document.getElementById('house-container').style.display = 'none';
 }
