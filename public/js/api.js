@@ -204,3 +204,45 @@ export async function fetchState() {
         statusText.innerText = "🔴 Сервер недоступен"; statusText.style.color = "var(--apple-blue)";
     }
 }
+
+// ➕ ДОБАВИТЬ: ЗАПРОСЫ ДЛЯ УПРАВЛЕНИЯ ГРУППАМИ
+export async function fetchGroups() {
+    const res = await fetch('/api/groups');
+    return res.json();
+}
+
+export async function createGroup(name) {
+    const res = await fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+    });
+    return res.json();
+}
+
+export async function deleteGroup(id) {
+    const res = await fetch('/api/groups/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+    });
+    return res.json();
+}
+
+export async function setAccountGroup(accountId, groupId) {
+    const res = await fetch('/api/accounts/group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId, groupId })
+    });
+    return res.json();
+}
+
+export async function saveGroupSettings(groupId, settings) {
+    const res = await fetch('/api/groups/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId, settings })
+    });
+    return res.json();
+}

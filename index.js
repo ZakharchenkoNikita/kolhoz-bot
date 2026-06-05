@@ -90,6 +90,32 @@ app.post('/api/accounts/delete', (req, res) => {
     res.json({ success: true });
 });
 
+// ➕ ДОБАВИТЬ: API ДЛЯ КООПЕРАТИВОВ (ГРУПП)
+app.get('/api/groups', (req, res) => res.json(db.getGroups()));
+
+app.post('/api/groups', (req, res) => {
+    const success = db.createGroup(req.body.name);
+    res.json({ success });
+});
+
+app.post('/api/groups/delete', (req, res) => {
+    db.deleteGroup(req.body.id);
+    syncEngines(); 
+    res.json({ success: true });
+});
+
+app.post('/api/accounts/group', (req, res) => {
+    db.setAccountGroup(req.body.accountId, req.body.groupId);
+    syncEngines(); 
+    res.json({ success: true });
+});
+
+app.post('/api/groups/settings', (req, res) => {
+    db.updateGroupSettings(req.body.groupId, req.body.settings);
+    syncEngines(); 
+    res.json({ success: true });
+});
+
 // 🛠️ ДОБАВИЛИ КЛЮЧ ДЛЯ УЛУЧШАТЕЛЯ И ДЛЯ БИЛЕТОВ ЛОТЕРЕИ
 const timerKeys = {
     farm: ['kb_f_timer'], rancho: ['kb_r_timer'], zagon: ['kb_z_timer'],
