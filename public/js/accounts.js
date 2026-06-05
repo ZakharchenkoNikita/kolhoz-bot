@@ -125,39 +125,63 @@ export async function toggleAccountStatus(id, is_active) {
 }
 
 export async function loadAccounts() {
-    const response = await fetch('/api/accounts');
-    const accounts = await response.json();
     const listContainer = document.getElementById('accounts-list');
+    listContainer.innerHTML = '<div style="padding: 10px; color: var(--text-muted);">Загрузка...</div>';
+
+    // Запрашиваем параллельно
+    const [resGroups, resAccounts] = await Promise.all([
+        fetch('/api/groups'),
+        fetch('/api/accounts')
+    ]);
+    const groups = await resGroups.json();
+    const accounts = await resAccounts.json();
+    
     listContainer.innerHTML = '';
 
-    if (accounts.length === 0) {
-        listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">Нет добавленных аккаунтов</div>';
+    if (groups.length === 0 && accounts.length === 0) {
+        listContainer.innerHTML = `<div style="padding: 14px 18px; color: var(--text-muted); font-size: 14px; text-align: center;">Ничего не найдено</div>`;
         return;
     }
 
-    accounts.forEach(acc => {
+    // 1. Рендер групп
+    groups.forEach(group => {
         const row = document.createElement('div');
-        row.className = 'kb-ios-row no-hover';
-        row.style.cursor = 'default';
+        row.className = 'kb-ios-row';
         row.innerHTML = `
-            <div style="display: flex; flex-direction: column;">
-                <span style="font-weight: 600; font-size: 16px;">${acc.username}</span>
-                <span style="color: var(--text-muted); font-size: 12px; margin-top: 3px;">ID: ${acc.id}</span>
+            <div class="kb-ios-icon-wrap">
+                <span style="font-size:20px; margin-right:8px;">👥</span>
+                <span style="font-weight:600; color:var(--apple-green);">${group.name}</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <label class="ios-switch">
-                    <input type="checkbox" onchange="window.toggleAccountStatus(${acc.id}, this.checked)" ${acc.is_active ? 'checked' : ''}>
-                    <span class="slider"></span>
-                </label>
-                <button onclick="window.deleteAccount(${acc.id})" style="background: rgba(255, 69, 58, 0.15); color: var(--apple-red, #ff453a); border: 1px solid rgba(255, 69, 58, 0.3); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                </button>
-            </div>
+            <button onclick="window.deleteGroupCustom(${group.id}); window.loadAccounts();" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
         `;
         listContainer.appendChild(row);
     });
-    
-    initAccountsDropdown();
+
+    // Разделитель
+    if (groups.length > 0 && accounts.length > 0) {
+        const sep = document.createElement('div');
+        sep.style.cssText = "height: 1px; background: var(--glass-border); margin: 0 20px;";
+        listContainer.appendChild(sep);
+    }
+
+    // 2. Рендер аккаунтов
+    accounts.forEach(acc => {
+        let nameColor = acc.is_active ? 'white' : 'var(--text-muted)';
+        const row = document.createElement('div');
+        row.className = 'kb-ios-row';
+        row.innerHTML = `
+            <div class="kb-ios-icon-wrap">
+                <span style="font-size:20px; margin-right:8px;">👤</span>
+                <span style="font-weight:600; color: ${nameColor};">${acc.username}</span>
+            </div>
+            <button onclick="window.deleteAccount(${acc.id})" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+        `;
+        listContainer.appendChild(row);
+    });
 }
 
 export async function addNewAccount() {
@@ -212,16 +236,21 @@ export async function deleteGroupCustom(id) {
 
 export function changeGroupCustom(id, name) {
     State.groupId = id;
-    State.accountId = null; // Сбрасываем выбранный одиночный аккаунт
+    State.accountId = null; 
+    State.global = null; // 🧹 УБИВАЕМ СТАРЫЕ ДАННЫЕ (чтобы рендер их не вернул)
     
     document.getElementById('header-nickname').innerText = `👥 ${name}`;
     document.getElementById('account-dropdown-menu').classList.remove('active');
     document.getElementById('account-chevron').classList.remove('open');
     
-    // Перерисовываем список, чтобы подсветить активную группу синим фоном
+    // 🧹 ЖЕСТКО ПРЯЧЕМ БЕЙДЖИ УРОВНЯ И ID
+    const lvlBadge = document.getElementById('header-level-badge');
+    const idBadge = document.getElementById('header-id-badge');
+    if (lvlBadge) lvlBadge.style.display = 'none';
+    if (idBadge) idBadge.style.display = 'none';
+    
     initAccountsDropdown();
     
-    // ВРЕМЕННАЯ ЗАГЛУШКА: Очищаем дашборд одиночного бота
     const container = document.getElementById('modules-container');
     container.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; color: var(--apple-green); padding: 50px; font-size: 20px; font-weight: 600; border: 1px dashed var(--glass-border); border-radius: 20px;">
@@ -229,5 +258,8 @@ export function changeGroupCustom(id, name) {
             <span style="font-size: 14px; color: var(--text-muted); font-weight: normal;">Интерфейс управления группой (Штаб) скоро появится здесь...</span>
         </div>
     `;
-    document.getElementById('house-container').style.display = 'none';
+    
+    // 🧹 ЖЕСТКО ПРЯЧЕМ ДОМИК
+    const houseContainer = document.getElementById('house-container');
+    if (houseContainer) houseContainer.style.display = 'none';
 }

@@ -14,6 +14,7 @@ window.changeAccountCustom = changeAccountCustom;
 window.toggleAccountStatus = toggleAccountStatus;
 window.addNewAccount = addNewAccount;
 window.deleteAccount = deleteAccount;
+window.loadAccounts = loadAccounts;
 // ➕ ДОБАВЛЕНО: Управление кооперативами и обновление меню
 window.changeGroupCustom = changeGroupCustom;
 window.deleteGroupCustom = deleteGroupCustom;
@@ -151,6 +152,7 @@ document.getElementById('dropdown-add-btn').addEventListener('click', () => {
     const backdrop = document.getElementById('settings-backdrop');
     if (backdrop) backdrop.classList.add('active');
     switchNavView('view_accounts', 'Аккаунты');
+    if (window.loadAccounts) window.loadAccounts();
 });
 
 document.getElementById('btn-settings').addEventListener('click', () => {
@@ -182,6 +184,18 @@ document.getElementById('recipes-close').addEventListener('click', () => {
     const backdrop = document.getElementById('recipes-backdrop');
     if (backdrop) backdrop.classList.remove('active');
 });
+
+const addGroupBtn = document.getElementById('dropdown-add-group-btn');
+if (addGroupBtn) {
+    addGroupBtn.addEventListener('click', () => {
+        document.getElementById('account-dropdown-menu').classList.remove('active');
+        document.getElementById('account-chevron').classList.remove('open');
+        document.getElementById('settings-modal').classList.add('active');
+        document.getElementById('settings-backdrop').classList.add('active');
+        switchNavView('view_accounts', 'Кооперативы');
+        if (window.loadAccounts) window.loadAccounts(); // ➕ Загружаем список
+    });
+}
 
 const recipesBackdrop = document.getElementById('recipes-backdrop');
 if (recipesBackdrop) {
