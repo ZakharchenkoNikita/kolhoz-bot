@@ -145,13 +145,12 @@ export async function loadAccounts() {
         if (groups.length === 0) {
             groupsContainer.innerHTML = `<div style="padding: 14px 20px; color: var(--text-muted); font-size: 14px;">Нет кооперативов</div>`;
         } else {
-            groups.forEach(group => {
-                let nameColor = acc.is_active ? 'white' : 'var(--text-muted)';
+        groups.forEach(group => {
                 const row = document.createElement('div');
                 row.className = 'kb-ios-row';
                 row.innerHTML = `
                     <div class="kb-ios-icon-wrap">
-                        <span style="font-weight:600; color: ${nameColor};">${group.name}</span>
+                        <span style="font-weight:600; color: var(--apple-green);">${group.name}</span>
                     </div>
                     <button onclick="window.deleteGroupCustom(${group.id}); window.loadAccounts();" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
