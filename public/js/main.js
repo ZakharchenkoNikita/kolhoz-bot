@@ -2,7 +2,7 @@ import { State } from './state.js';
 // 🚁 ИМПОРТ: Добавили setLotteryTickets
 import { fetchState, toggleModule, toggleMaster, resetModule, setLotteryPrio, setHeliTarget, setLotteryTickets, toggleCulinarySkill } from './api.js';
 import { renderLoop, renderHouseCard, renderRecipes } from './ui.js'; // 📖 Добавили renderRecipes
-import { initAccountsDropdown, changeAccountCustom, toggleAccountStatus, loadAccounts, addNewAccount, deleteAccount, changeGroupCustom, deleteGroupCustom } from './accounts.js';
+import { initAccountsDropdown, changeAccountCustom, toggleAccountStatus, loadAccounts, addNewAccount, deleteAccount, changeGroupCustom, deleteGroupCustom, openGroupSelector, closeGroupSelector, bindAccountToGroup } from './accounts.js';
 import { switchNavView } from './settings.js';
 
 // 1. Делаем функции глобальными, чтобы они работали через атрибут onclick="..." в HTML-коде
@@ -19,6 +19,10 @@ window.loadAccounts = loadAccounts;
 window.changeGroupCustom = changeGroupCustom;
 window.deleteGroupCustom = deleteGroupCustom;
 window.initAccountsDropdown = initAccountsDropdown;
+// ➕ ДОБАВЛЕНО: Action Sheet
+window.openGroupSelector = openGroupSelector;
+window.closeGroupSelector = closeGroupSelector;
+window.bindAccountToGroup = bindAccountToGroup;
 window.switchNavView = switchNavView;
 // 🚁 ГЛОБАЛИЗАЦИЯ: Связываем функции с окном
 window.setHeliTarget = setHeliTarget;

@@ -146,12 +146,12 @@ export async function loadAccounts() {
             groupsContainer.innerHTML = `<div style="padding: 14px 20px; color: var(--text-muted); font-size: 14px;">Нет кооперативов</div>`;
         } else {
             groups.forEach(group => {
+                let nameColor = acc.is_active ? 'white' : 'var(--text-muted)';
                 const row = document.createElement('div');
                 row.className = 'kb-ios-row';
                 row.innerHTML = `
                     <div class="kb-ios-icon-wrap">
-                        <span style="font-size:20px; margin-right:8px;">👥</span>
-                        <span style="font-weight:600; color:var(--apple-green);">${group.name}</span>
+                        <span style="font-weight:600; color: ${nameColor};">${group.name}</span>
                     </div>
                     <button onclick="window.deleteGroupCustom(${group.id}); window.loadAccounts();" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -168,20 +168,33 @@ export async function loadAccounts() {
         if (accounts.length === 0) {
             accountsContainer.innerHTML = `<div style="padding: 14px 20px; color: var(--text-muted); font-size: 14px;">Нет аккаунтов</div>`;
         } else {
+            currentGroupsCache = groups;
+
             accounts.forEach(acc => {
                 let nameColor = acc.is_active ? 'white' : 'var(--text-muted)';
+                
+                // Проверяем, в какой группе состоит аккаунт
+                let groupName = 'Без кооператива';
+                if (acc.group_id) {
+                    const g = groups.find(x => x.id === acc.group_id);
+                    if (g) groupName = g.name;
+                }
+
                 const row = document.createElement('div');
                 row.className = 'kb-ios-row';
                 row.innerHTML = `
-                    <div class="kb-ios-icon-wrap">
-                        <span style="font-size:20px; margin-right:8px;">👤</span>
+                    <div class="kb-ios-icon-wrap" style="flex-direction: column; align-items: flex-start; gap: 2px;">
                         <span style="font-weight:600; color: ${nameColor};">${acc.username}</span>
+                        <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">${groupName}</span>
                     </div>
                     <div style="display:flex; gap:12px; align-items:center;">
                         <label class="ios-switch" style="transform: scale(0.8); margin: 0;">
                             <input type="checkbox" ${acc.is_active ? 'checked' : ''} onchange="window.toggleAccountStatus(${acc.id}, this.checked)">
                             <span class="slider"></span>
                         </label>
+                        <button onclick="window.openGroupSelector(${acc.id})" style="background:none; border:none; color:var(--apple-blue); cursor:pointer; padding:0; display:flex;" title="Привязать к кооперативу">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                        </button>
                         <button onclick="window.deleteAccount(${acc.id})" style="background:none; border:none; color:#ff453a; cursor:pointer; padding:0; display:flex;" title="Удалить">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                         </button>
@@ -271,4 +284,47 @@ export function changeGroupCustom(id, name) {
     // 🧹 ЖЕСТКО ПРЯЧЕМ ДОМИК
     const houseContainer = document.getElementById('house-container');
     if (houseContainer) houseContainer.style.display = 'none';
+}
+
+// ==========================================
+// МЕНЮ ПРИВЯЗКИ АККАУНТА (Action Sheet)
+// ==========================================
+let currentGroupsCache = [];
+let selectedAccountForGroup = null;
+
+export function openGroupSelector(accountId) {
+    selectedAccountForGroup = accountId;
+    const optionsContainer = document.getElementById('group-sheet-options');
+    optionsContainer.innerHTML = '';
+
+    // Кнопка отвязки
+    optionsContainer.innerHTML += `<div class="kb-action-sheet-btn danger" onclick="window.bindAccountToGroup(null)">Отвязать от кооператива</div>`;
+
+    // Кнопки всех существующих групп
+    currentGroupsCache.forEach(g => {
+        optionsContainer.innerHTML += `<div class="kb-action-sheet-btn" onclick="window.bindAccountToGroup(${g.id})">${g.name}</div>`;
+    });
+
+    document.getElementById('group-sheet-backdrop').classList.add('active');
+    document.getElementById('group-sheet').classList.add('active');
+}
+
+export function closeGroupSelector() {
+    document.getElementById('group-sheet-backdrop').classList.remove('active');
+    document.getElementById('group-sheet').classList.remove('active');
+    selectedAccountForGroup = null;
+}
+
+export async function bindAccountToGroup(groupId) {
+    if (!selectedAccountForGroup) return;
+    
+    await fetch('/api/accounts/group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: selectedAccountForGroup, groupId: groupId })
+    });
+    
+    closeGroupSelector();
+    loadAccounts(); // Перерисовываем список, чтобы показать новое название группы
+    initAccountsDropdown(); // Обновляем шапку дашборда
 }

@@ -226,3 +226,19 @@ mark.highlight-mark {
     text-shadow: none !important;
     font-weight: inherit !important;
 }
+
+/* ========================================== */
+/* 📱 iOS ACTION SHEET (ВЫБОР ГРУППЫ)         */
+/* ========================================== */
+.kb-action-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 10000; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+.kb-action-sheet-backdrop.active { opacity: 1; pointer-events: all; }
+.kb-action-sheet { position: fixed; bottom: -100%; left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 400px; z-index: 10001; transition: bottom 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); padding-bottom: calc(env(safe-area-inset-bottom) + 16px); }
+.kb-action-sheet.active { bottom: 16px; }
+.kb-action-sheet-title { background: rgba(30, 30, 32, 0.9); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border-radius: 14px 14px 0 0; padding: 14px; text-align: center; color: var(--text-muted); font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--glass-border); }
+.kb-action-sheet-options { background: rgba(30, 30, 32, 0.9); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border-radius: 0 0 14px 14px; overflow: hidden; display: flex; flex-direction: column; }
+.kb-action-sheet-btn { padding: 18px; text-align: center; font-size: 18px; color: var(--apple-blue); cursor: pointer; border-bottom: 1px solid var(--glass-border); transition: background 0.2s; }
+.kb-action-sheet-btn:last-child { border-bottom: none; }
+.kb-action-sheet-btn:hover { background: rgba(255,255,255,0.1); }
+.kb-action-sheet-btn.danger { color: #ff453a; }
+.kb-action-sheet-cancel { background: rgba(30, 30, 32, 0.9); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border-radius: 14px; padding: 18px; text-align: center; font-size: 18px; font-weight: 600; color: var(--apple-blue); margin-top: 8px; cursor: pointer; transition: background 0.2s; }
+.kb-action-sheet-cancel:hover { background: rgba(255,255,255,0.1); }
