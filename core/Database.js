@@ -43,6 +43,13 @@ class DBManager {
             is_active INTEGER DEFAULT 1
         )`);
 
+        // ➕ ДОБАВИТЬ: Создаем таблицу групп
+        this.db.exec(`CREATE TABLE IF NOT EXISTS groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            settings TEXT DEFAULT '{}'
+        )`);
+
         this.db.exec(`CREATE TABLE IF NOT EXISTS timers (
             account_id INTEGER,
             key TEXT,
@@ -91,6 +98,7 @@ class DBManager {
         this._ensureColumnExists('profile', 'storeroom', 'TEXT DEFAULT "{}"');
         this._ensureColumnExists('profile', 'recipe_book', 'TEXT DEFAULT "{}"');
         this._ensureColumnExists('profile', 'is_building', 'INTEGER DEFAULT 0');
+        this._ensureColumnExists('accounts', 'group_id', 'INTEGER DEFAULT NULL');
 
         this.db.exec(`CREATE TABLE IF NOT EXISTS riddles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -191,6 +199,11 @@ class DBManager {
         `);
         this.stmts.getRecipe = this.db.prepare('SELECT * FROM recipes_kb WHERE id = ?');
         this.stmts.getAllRecipes = this.db.prepare('SELECT * FROM recipes_kb');
+
+        this.stmts.createGroup = this.db.prepare('INSERT OR IGNORE INTO groups (name) VALUES (?)');
+        this.stmts.getGroups = this.db.prepare('SELECT * FROM groups');
+        this.stmts.deleteGroup = this.db.prepare('DELETE FROM groups WHERE id = ?');
+        this.stmts.setAccountGroup = this.db.prepare('UPDATE accounts SET group_id = ? WHERE id = ?');
     }
 
     seedZavalinka() {
@@ -242,7 +255,7 @@ class DBManager {
     }
 
     getAccounts() {
-        return this.db.prepare('SELECT id, username, password, is_active FROM accounts').all();
+        return this.db.prepare('SELECT id, username, password, is_active, group_id FROM accounts').all();
     }
 
     toggleAccount(id, isActive) {
@@ -254,6 +267,36 @@ class DBManager {
         this.db.prepare('DELETE FROM timers WHERE account_id = ?').run(id);
         this.db.prepare('DELETE FROM account_settings WHERE account_id = ?').run(id);
         this.db.prepare('DELETE FROM profile WHERE account_id = ?').run(id);
+    }
+
+    // ==========================================
+    // 3.1. УПРАВЛЕНИЕ ГРУППАМИ
+    // ==========================================
+    createGroup(name) {
+        try {
+            const info = this.stmts.createGroup.run(name);
+            return info.changes > 0; // Вернет true, если группа создана (не было дубликата)
+        } catch (e) { return false; }
+    }
+
+    getGroups() {
+        return this.stmts.getGroups.all().map(g => {
+            g.settings = this._parseJson(g.settings);
+            return g;
+        });
+    }
+
+    deleteGroup(id) {
+        // Транзакция: сначала отвязываем аккаунты, потом удаляем группу
+        this.db.transaction(() => {
+            this.db.prepare('UPDATE accounts SET group_id = NULL WHERE group_id = ?').run(id);
+            this.stmts.deleteGroup.run(id);
+        })();
+    }
+
+    setAccountGroup(accountId, groupId) {
+        // groupId может быть null, если мы хотим убрать аккаунт из группы
+        this.stmts.setAccountGroup.run(groupId, accountId);
     }
 
     // ==========================================
