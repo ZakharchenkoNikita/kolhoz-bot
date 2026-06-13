@@ -20,8 +20,9 @@ class LabParser extends BaseParser {
         if (investigatingBlock.length > 0) {
             result.isSelecting = true;
             
-            // Название: <span><span>Вишня gen 2</span></span>
+            // Название и картинка
             result.currentPlant = investigatingBlock.find('.small > span > span').first().text().trim();
+            result.image = investigatingBlock.find('img.portrait').attr('src') || '';
             
             // Процент: Собрано урожая: 5786050 (эфф. 86,132%)
             const effText = investigatingBlock.next('li.pb').text();

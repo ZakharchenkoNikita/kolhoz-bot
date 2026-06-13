@@ -13,10 +13,11 @@ class GoszakazParser extends BaseParser {
             targets: []
         };
 
-        // 1. Парсим дедлайн (Итоги будут подведены: <span>15 июн. 12:00</span>)
-        const deadlineSpan = $('div:contains("Итоги будут подведены:")').find('span').last();
-        if (deadlineSpan.length > 0) {
-            result.deadline = deadlineSpan.text().trim();
+        // 1. Парсим дедлайн через сырой HTML, чтобы не цеплять "30 штук" в конце блока
+        const htmlText = $.html();
+        const dateMatch = htmlText.match(/Итоги будут подведены:\s*<span>(.*?)<\/span>/i);
+        if (dateMatch && dateMatch[1]) {
+            result.deadline = dateMatch[1].trim();
         }
 
         // 2. Парсим карточки растений (блоки с классом .pt)
@@ -25,6 +26,9 @@ class GoszakazParser extends BaseParser {
             const plantName = plantBlock.find('.small > span > span').first().text().trim();
             
             if (!plantName) return;
+
+            // Получаем ссылку на картинку
+            const imgUrl = plantBlock.find('img.portrait').attr('src') || '';
 
             // 3. Вытаскиваем ограничение по уровню (доступно с 37 уровня)
             let minLevel = 1;
@@ -37,7 +41,8 @@ class GoszakazParser extends BaseParser {
 
             result.targets.push({
                 name: plantName,
-                minLevel: minLevel
+                minLevel: minLevel,
+                image: imgUrl
             });
         });
 

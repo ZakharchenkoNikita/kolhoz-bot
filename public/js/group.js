@@ -34,17 +34,21 @@ export async function renderGroupDashboard(groupId, groupName) {
         // ==========================================
         let labHtml = '';
         if (data.lab && data.lab.isSelecting) {
+            // УБРАЛИ grid-column: 1 / -1; чтобы карточки встали в один ряд
             labHtml = `
-                <div class="glass-panel module-card" style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 15px;">
+                <div class="glass-panel module-card" style="display: flex; flex-direction: column; gap: 15px;">
                     <div class="module-header">
-                        <div class="module-title"><span>🧪</span> Селекция кооператива</div>
+                        <div class="module-title"><span>🧪</span> Селекция</div>
                         <div class="module-controls" style="opacity: 1; pointer-events: all; transform: none;">
                             <span style="font-size: 12px; font-weight: 600; color: var(--apple-green); background: rgba(50, 215, 75, 0.15); padding: 4px 10px; border-radius: 10px;">В ПРОЦЕССЕ</span>
                         </div>
                     </div>
                     <div>
-                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
-                            <div style="font-size: 18px; font-weight: 600; color: white;">${data.lab.currentPlant}</div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                ${data.lab.image ? `<img src="https://sadovnik.mobi${data.lab.image}" style="width: 32px; height: 32px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">` : ''}
+                                <div style="font-size: 17px; font-weight: 600; color: white;">${data.lab.currentPlant}</div>
+                            </div>
                             <div style="font-size: 16px; color: var(--text-muted); font-weight: 600;">${data.lab.efficiencyPercent}%</div>
                         </div>
                         <div class="progress-track" style="height: 10px; border-radius: 10px; background: rgba(255,255,255,0.05);">
@@ -55,9 +59,9 @@ export async function renderGroupDashboard(groupId, groupName) {
             `;
         } else {
             labHtml = `
-                <div class="glass-panel module-card" style="grid-column: 1 / -1;">
+                <div class="glass-panel module-card">
                     <div class="module-header">
-                        <div class="module-title"><span>🧪</span> Селекция кооператива</div>
+                        <div class="module-title"><span>🧪</span> Селекция</div>
                     </div>
                     <div style="padding: 20px 0; text-align: center; color: var(--text-muted); font-weight: 500;">
                         Лаборатория простаивает
@@ -73,18 +77,28 @@ export async function renderGroupDashboard(groupId, groupName) {
         if (data.goszakaz) {
             let targetsHtml = '';
             if (data.goszakaz.targets && data.goszakaz.targets.length > 0) {
-                targetsHtml = data.goszakaz.targets.map(t => `
-                    <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-weight: 600; font-size: 16px; color: white;">${t.name}</span>
-                        <span style="font-size: 12px; color: var(--apple-blue); background: rgba(10, 132, 255, 0.15); font-weight: 600; padding: 4px 10px; border-radius: 8px;">с ${t.minLevel} ур.</span>
-                    </div>
-                `).join('');
+                targetsHtml = data.goszakaz.targets.map(t => {
+                    // Логика: если уровень > 1, показываем плашку, иначе прячем
+                    const levelBadge = t.minLevel > 1 
+                        ? `<span style="font-size: 12px; color: var(--apple-blue); background: rgba(10, 132, 255, 0.15); font-weight: 600; padding: 4px 10px; border-radius: 8px;">с ${t.minLevel} ур.</span>` 
+                        : '';
+                    
+                    return `
+                        <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                ${t.image ? `<img src="https://sadovnik.mobi${t.image}" style="width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">` : ''}
+                                <span style="font-weight: 600; font-size: 15px; color: white;">${t.name}</span>
+                            </div>
+                            ${levelBadge}
+                        </div>
+                    `;
+                }).join('');
             } else {
                 targetsHtml = `<div style="text-align: center; color: var(--text-muted); font-size: 14px; padding: 10px 0;">Нет активных целей</div>`;
             }
 
             gosHtml = `
-                <div class="glass-panel module-card" style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 15px;">
+                <div class="glass-panel module-card" style="display: flex; flex-direction: column; gap: 15px;">
                     <div class="module-header">
                         <div class="module-title"><span>📜</span> Госзаказ</div>
                         ${data.goszakaz.deadline ? `<div style="font-size: 13px; color: #ff9f0a; font-weight: 600; background: rgba(255, 159, 10, 0.15); padding: 4px 10px; border-radius: 10px;">До: ${data.goszakaz.deadline}</div>` : ''}
