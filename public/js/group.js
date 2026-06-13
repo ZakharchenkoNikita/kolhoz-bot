@@ -49,13 +49,15 @@ export async function renderGroupDashboard(groupId, groupName) {
                         ${data.lab.image ? `<img src="https://sadovnik.mobi${data.lab.image}" style="width: 56px; height: 56px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">` : ''}
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <div style="font-size: 19px; font-weight: 700; color: white; letter-spacing: -0.3px;">${data.lab.currentPlant}</div>
-                            <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Исследование нового сорта</div>
+                            <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">
+                                ${data.lab.timeClock ? `⏱ ${data.lab.timeClock}` : ''} ${data.lab.timeSoil ? `&nbsp; 🌱 ${data.lab.timeSoil}` : ''}
+                            </div>
                         </div>
                     </div>
 
                     <div style="margin-top: auto;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;">
-                            <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Текущий прогресс</span>
+                            <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Собрано урожая: <span style="color: white;">${data.lab.harvestCount || '0'}</span></span>
                             <span style="font-size: 20px; color: var(--apple-green); font-weight: 700; letter-spacing: -0.5px;">${data.lab.efficiencyPercent}%</span>
                         </div>
                         <div class="progress-track" style="height: 12px; border-radius: 6px; background: rgba(255,255,255,0.06); overflow: hidden;">
@@ -82,19 +84,22 @@ export async function renderGroupDashboard(groupId, groupName) {
             let targetsHtml = '';
             if (data.goszakaz.targets && data.goszakaz.targets.length > 0) {
                 targetsHtml = `
-                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--glass-border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column;">
-                        ${data.goszakaz.targets.map((t, idx) => {
+                    <div style="display: flex; flex-direction: column; gap: 20px;">
+                        ${data.goszakaz.targets.map((t) => {
                             const levelBadge = t.minLevel > 1 
-                                ? `<span style="font-size: 12px; color: var(--apple-blue); background: rgba(10, 132, 255, 0.12); font-weight: 600; padding: 4px 10px; border-radius: 8px;">с ${t.minLevel} ур.</span>` 
+                                ? `<span style="font-size: 11px; font-weight: 700; color: var(--apple-blue); background: rgba(10, 132, 255, 0.12); padding: 4px 10px; border-radius: 12px; letter-spacing: 0.5px; white-space: nowrap;">с ${t.minLevel} ур.</span>` 
                                 : '';
-                            const isLast = idx === data.goszakaz.targets.length - 1;
-                            const borderStyle = isLast ? '' : 'border-bottom: 1px solid rgba(255, 255, 255, 0.06);';
                             
                             return `
-                                <div style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; ${borderStyle}">
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        ${t.image ? `<img src="https://sadovnik.mobi${t.image}" style="width: 44px; height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">` : ''}
-                                        <span style="font-weight: 600; font-size: 16px; color: white; letter-spacing: -0.2px;">${t.name}</span>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                                    <div style="display: flex; align-items: center; gap: 16px;">
+                                        ${t.image ? `<img src="https://sadovnik.mobi${t.image}" style="width: 56px; height: 56px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">` : ''}
+                                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                                            <div style="font-size: 19px; font-weight: 700; color: white; letter-spacing: -0.3px;">${t.name}</div>
+                                            <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">
+                                                ${t.growTime ? `⏱ ${t.growTime}` : ''} ${t.fertTime ? `&nbsp; 🌱 ${t.fertTime}` : ''}
+                                            </div>
+                                        </div>
                                     </div>
                                     ${levelBadge}
                                 </div>
@@ -107,7 +112,7 @@ export async function renderGroupDashboard(groupId, groupName) {
             }
 
             gosHtml = `
-                <div class="glass-panel module-card" style="display: flex; flex-direction: column; gap: 15px; padding: 20px; height: 100%; box-sizing: border-box;">
+                <div class="glass-panel module-card" style="display: flex; flex-direction: column; gap: 20px; padding: 20px; height: 100%; box-sizing: border-box;">
                     <div class="module-header" style="margin: 0;">
                         <div class="module-title"><span>📜</span> Госзаказ</div>
                         ${data.goszakaz.deadline ? `<div style="font-size: 12px; color: #ff9f0a; font-weight: 700; background: rgba(255, 159, 10, 0.12); padding: 4px 10px; border-radius: 12px; letter-spacing: 0.3px;">ДО: ${data.goszakaz.deadline}</div>` : ''}

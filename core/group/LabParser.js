@@ -24,10 +24,27 @@ class LabParser extends BaseParser {
             result.currentPlant = investigatingBlock.find('.small > span > span').first().text().trim();
             result.image = investigatingBlock.find('img.portrait').attr('src') || '';
             
-            // Процент: Собрано урожая: 5786050 (эфф. 86,132%)
+            // Парсим таймеры (созревание и удобрение)
+            const timeSpans = investigatingBlock.find('.small.minor span.title');
+            if (timeSpans.length >= 2) {
+                result.timeClock = $(timeSpans[0]).text().trim();
+                result.timeSoil = $(timeSpans[1]).text().trim();
+            } else {
+                result.timeClock = '';
+                result.timeSoil = '';
+            }
+
+            // Процент и количество урожая
             const effText = investigatingBlock.next('li.pb').text();
-            const effMatch = effText.match(/эфф\.\s*([\d,]+)%/i);
             
+            const harvestMatch = effText.match(/Собрано урожая:\s*([\d\s]+)/i);
+            if (harvestMatch && harvestMatch[1]) {
+                result.harvestCount = harvestMatch[1].replace(/\s+/g, '').trim();
+            } else {
+                result.harvestCount = '0';
+            }
+
+            const effMatch = effText.match(/эфф\.\s*([\d,]+)%/i);
             if (effMatch && effMatch[1]) {
                 result.efficiencyPercent = parseFloat(effMatch[1].replace(',', '.'));
             }

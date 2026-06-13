@@ -30,7 +30,7 @@ class GoszakazParser extends BaseParser {
             // Получаем ссылку на картинку
             const imgUrl = plantBlock.find('img.portrait').attr('src') || '';
 
-            // 3. Вытаскиваем ограничение по уровню (доступно с 37 уровня)
+        // 3. Вытаскиваем ограничение по уровню (доступно с 37 уровня)
             let minLevel = 1;
             const levelText = plantBlock.find('.small').text();
             const levelMatch = levelText.match(/доступно с\s*(\d+)\s*уровня/i);
@@ -39,10 +39,23 @@ class GoszakazParser extends BaseParser {
                 minLevel = parseInt(levelMatch[1], 10);
             }
 
+            // 4. Безопасно вытаскиваем время созревания и удобрения через HTML
+            let growTime = '';
+            let fertTime = '';
+            const minorHtml = plantBlock.find('.small.minor').html() || '';
+            
+            const growMatch = minorHtml.match(/Время созревания:.*?<span[^>]*>([^<]+)<\/span>/i);
+            if (growMatch && growMatch[1]) growTime = growMatch[1].trim();
+            
+            const fertMatch = minorHtml.match(/Время до удобрения:.*?<span[^>]*>([^<]+)<\/span>/i);
+            if (fertMatch && fertMatch[1]) fertTime = fertMatch[1].trim();
+
             result.targets.push({
                 name: plantName,
                 minLevel: minLevel,
-                image: imgUrl
+                image: imgUrl,
+                growTime: growTime,
+                fertTime: fertTime
             });
         });
 
