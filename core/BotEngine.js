@@ -66,11 +66,11 @@ class BotEngine {
     // 📡 Разведка для Штаба Кооператива (вызывается бэкендом)
     async forceGroupScan() {
         try {
-            // Запускаем парсеры параллельно для скорости
-            const [labData, gosData] = await Promise.all([
-                this.labParser.scan(),
-                this.goszakazParser.scan()
-            ]);
+            // ВАЖНО: Запускаем строго по очереди! 
+            // Игровой движок ломает сессию при одновременных запросах.
+            const labData = await this.labParser.scan();
+            const gosData = await this.goszakazParser.scan();
+            
             return { success: true, data: { lab: labData, goszakaz: gosData } };
         } catch (error) {
             console.error(`❌ [${this.username}] Ошибка разведки группы:`, error.message);
