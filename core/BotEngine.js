@@ -5,6 +5,8 @@ const ProfileScanner = require('./ProfileScanner');
 const HouseScanner = require('./house/HouseScanner');
 const StoreroomScanner = require('./house/StoreroomScanner');
 const RecipeBookScanner = require('./RecipeBookScanner'); // 📖 ДОБАВЛЕНО: Импорт сканера рецептов
+const LabParser = require('./group/LabParser'); // 🧪 ДОБАВЛЕН ПАРСЕР ЛАБЫ
+const GoszakazParser = require('./group/GoszakazParser'); // 📜 ДОБАВЛЕН ПАРСЕР ГОСЗАКАЗА
 
 const FarmModule = require('../modules/Farm');
 const LotteryModule = require('../modules/lottery/Lottery');
@@ -54,7 +56,26 @@ class BotEngine {
         this.recipeScanner = new RecipeBookScanner(this.client, globalDb, this.username); 
         this.isScanningRecipes = false; // 🔒 Мьютекс (защита от двойного сканирования)
 
+        // 📡 Парсеры для Штаба (Кооператива)
+        this.labParser = new LabParser(this.client, globalDb, this.username);
+        this.goszakazParser = new GoszakazParser(this.client, globalDb, this.username);
+
         this.isRunning = false;
+    }
+
+    // 📡 Разведка для Штаба Кооператива (вызывается бэкендом)
+    async forceGroupScan() {
+        try {
+            // Запускаем парсеры параллельно для скорости
+            const [labData, gosData] = await Promise.all([
+                this.labParser.scan(),
+                this.goszakazParser.scan()
+            ]);
+            return { success: true, data: { lab: labData, goszakaz: gosData } };
+        } catch (error) {
+            console.error(`❌ [${this.username}] Ошибка разведки группы:`, error.message);
+            return { success: false, error: error.message };
+        }
     }
 
     // 🔒 Безопасный метод сканирования (чтобы ручной и автоматический запуск не пересеклись)

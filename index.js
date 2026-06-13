@@ -116,6 +116,40 @@ app.post('/api/groups/settings', (req, res) => {
     res.json({ success: true });
 });
 
+// 📡 API: Разведка состояния Штаба (Лаба + Госзаказ)
+app.get('/api/groups/hq-status', async (req, res) => {
+    const groupId = req.query.groupId;
+    if (!groupId) return res.status(400).json({ error: 'Не указан ID группы' });
+
+    // 1. Ищем всех аккаунтов, которые состоят в этой группе
+    const groupAccounts = db.getAccounts().filter(a => a.group_id == groupId);
+    
+    // 2. Ищем первого попавшегося АКТИВНОГО бота в памяти (engines)
+    let activeBot = null;
+    for (let acc of groupAccounts) {
+        if (engines[acc.id]) {
+            activeBot = engines[acc.id];
+            break;
+        }
+    }
+
+    // 3. Засылаем бота на разведку
+    if (activeBot) {
+        const result = await activeBot.forceGroupScan();
+        if (result.success) {
+            return res.json({ ...result.data, isOnline: true });
+        }
+    }
+
+    // 4. Если нет живых ботов - отдаем заглушку
+    res.json({ 
+        lab: null, 
+        goszakaz: null, 
+        isOnline: false, 
+        message: "Нет запущенных аккаунтов для сбора данных" 
+    });
+});
+
 // 🛠️ ДОБАВИЛИ КЛЮЧ ДЛЯ УЛУЧШАТЕЛЯ И ДЛЯ БИЛЕТОВ ЛОТЕРЕИ
 const timerKeys = {
     farm: ['kb_f_timer'], rancho: ['kb_r_timer'], zagon: ['kb_z_timer'],
