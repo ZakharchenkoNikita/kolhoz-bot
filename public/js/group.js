@@ -1,3 +1,5 @@
+// public/js/group.js
+
 export async function renderGroupDashboard(groupId, groupName) {
     const container = document.getElementById('modules-container');
     const houseContainer = document.getElementById('house-container');
@@ -34,38 +36,40 @@ export async function renderGroupDashboard(groupId, groupName) {
         // ==========================================
         let labHtml = '';
         if (data.lab && data.lab.isSelecting) {
-            // УБРАЛИ grid-column: 1 / -1; чтобы карточки встали в один ряд
             labHtml = `
-                <div class="glass-panel module-card" style="display: flex; flex-direction: column; gap: 15px;">
-                    <div class="module-header">
+                <div class="glass-panel module-card" style="display: flex; flex-direction: column; gap: 20px; padding: 20px; height: 100%; box-sizing: border-box;">
+                    <div class="module-header" style="margin: 0;">
                         <div class="module-title"><span>🧪</span> Селекция</div>
                         <div class="module-controls" style="opacity: 1; pointer-events: all; transform: none;">
-                            <span style="font-size: 12px; font-weight: 600; color: var(--apple-green); background: rgba(50, 215, 75, 0.15); padding: 4px 10px; border-radius: 10px;">В ПРОЦЕССЕ</span>
+                            <span style="font-size: 11px; font-weight: 700; color: var(--apple-green); background: rgba(50, 215, 75, 0.12); padding: 4px 10px; border-radius: 12px; letter-spacing: 0.5px;">В ПРОЦЕССЕ</span>
                         </div>
                     </div>
-                    <div>
-                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                ${data.lab.image ? `<img src="https://sadovnik.mobi${data.lab.image}" style="width: 32px; height: 32px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">` : ''}
-                                <div style="font-size: 17px; font-weight: 600; color: white;">${data.lab.currentPlant}</div>
-                            </div>
-                            <div style="font-size: 16px; color: var(--text-muted); font-weight: 600;">${data.lab.efficiencyPercent}%</div>
+                    
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        ${data.lab.image ? `<img src="https://sadovnik.mobi${data.lab.image}" style="width: 56px; height: 56px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">` : ''}
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="font-size: 19px; font-weight: 700; color: white; letter-spacing: -0.3px;">${data.lab.currentPlant}</div>
+                            <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Исследование нового сорта</div>
                         </div>
-                        <div class="progress-track" style="height: 10px; border-radius: 10px; background: rgba(255,255,255,0.05);">
-                            <div class="progress-fill" style="width: ${data.lab.efficiencyPercent}%; background: var(--apple-green); border-radius: 10px; transition: width 1s ease-in-out;"></div>
+                    </div>
+
+                    <div style="margin-top: auto;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;">
+                            <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Текущий прогресс</span>
+                            <span style="font-size: 20px; color: var(--apple-green); font-weight: 700; letter-spacing: -0.5px;">${data.lab.efficiencyPercent}%</span>
+                        </div>
+                        <div class="progress-track" style="height: 12px; border-radius: 6px; background: rgba(255,255,255,0.06); overflow: hidden;">
+                            <div class="progress-fill" style="width: ${data.lab.efficiencyPercent}%; background: var(--apple-green); border-radius: 6px; height: 100%; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);"></div>
                         </div>
                     </div>
                 </div>
             `;
         } else {
             labHtml = `
-                <div class="glass-panel module-card">
-                    <div class="module-header">
-                        <div class="module-title"><span>🧪</span> Селекция</div>
-                    </div>
-                    <div style="padding: 20px 0; text-align: center; color: var(--text-muted); font-weight: 500;">
-                        Лаборатория простаивает
-                    </div>
+                <div class="glass-panel module-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 40px 20px; height: 100%; box-sizing: border-box;">
+                    <div style="font-size: 32px; margin-bottom: 10px;">🧪</div>
+                    <div style="font-size: 16px; font-weight: 600; color: white;">Селекция</div>
+                    <div style="padding: 5px 0; text-align: center; color: var(--text-muted); font-weight: 500; font-size: 13px;">Лаборатория простаивает</div>
                 </div>
             `;
         }
@@ -77,41 +81,51 @@ export async function renderGroupDashboard(groupId, groupName) {
         if (data.goszakaz) {
             let targetsHtml = '';
             if (data.goszakaz.targets && data.goszakaz.targets.length > 0) {
-                targetsHtml = data.goszakaz.targets.map(t => {
-                    // Логика: если уровень > 1, показываем плашку, иначе прячем
-                    const levelBadge = t.minLevel > 1 
-                        ? `<span style="font-size: 12px; color: var(--apple-blue); background: rgba(10, 132, 255, 0.15); font-weight: 600; padding: 4px 10px; border-radius: 8px;">с ${t.minLevel} ур.</span>` 
-                        : '';
-                    
-                    return `
-                        <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                ${t.image ? `<img src="https://sadovnik.mobi${t.image}" style="width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">` : ''}
-                                <span style="font-weight: 600; font-size: 15px; color: white;">${t.name}</span>
-                            </div>
-                            ${levelBadge}
-                        </div>
-                    `;
-                }).join('');
+                targetsHtml = `
+                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--glass-border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column;">
+                        ${data.goszakaz.targets.map((t, idx) => {
+                            const levelBadge = t.minLevel > 1 
+                                ? `<span style="font-size: 12px; color: var(--apple-blue); background: rgba(10, 132, 255, 0.12); font-weight: 600; padding: 4px 10px; border-radius: 8px;">с ${t.minLevel} ур.</span>` 
+                                : '';
+                            const isLast = idx === data.goszakaz.targets.length - 1;
+                            const borderStyle = isLast ? '' : 'border-bottom: 1px solid rgba(255, 255, 255, 0.06);';
+                            
+                            return `
+                                <div style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; ${borderStyle}">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        ${t.image ? `<img src="https://sadovnik.mobi${t.image}" style="width: 44px; height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">` : ''}
+                                        <span style="font-weight: 600; font-size: 16px; color: white; letter-spacing: -0.2px;">${t.name}</span>
+                                    </div>
+                                    ${levelBadge}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
             } else {
-                targetsHtml = `<div style="text-align: center; color: var(--text-muted); font-size: 14px; padding: 10px 0;">Нет активных целей</div>`;
+                targetsHtml = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 0;">Нет активных целей госзаказа</div>`;
             }
 
             gosHtml = `
-                <div class="glass-panel module-card" style="display: flex; flex-direction: column; gap: 15px;">
-                    <div class="module-header">
+                <div class="glass-panel module-card" style="display: flex; flex-direction: column; gap: 15px; padding: 20px; height: 100%; box-sizing: border-box;">
+                    <div class="module-header" style="margin: 0;">
                         <div class="module-title"><span>📜</span> Госзаказ</div>
-                        ${data.goszakaz.deadline ? `<div style="font-size: 13px; color: #ff9f0a; font-weight: 600; background: rgba(255, 159, 10, 0.15); padding: 4px 10px; border-radius: 10px;">До: ${data.goszakaz.deadline}</div>` : ''}
+                        ${data.goszakaz.deadline ? `<div style="font-size: 12px; color: #ff9f0a; font-weight: 700; background: rgba(255, 159, 10, 0.12); padding: 4px 10px; border-radius: 12px; letter-spacing: 0.3px;">ДО: ${data.goszakaz.deadline}</div>` : ''}
                     </div>
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; flex-direction: column; justify-content: center; flex-grow: 1;">
                         ${targetsHtml}
                     </div>
                 </div>
             `;
         }
 
-        // Отрисовываем всё в контейнер
-        container.innerHTML = labHtml + gosHtml;
+        // Выводим карточки в двухколоночную сетку на всю ширину панели
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%;">
+                ${labHtml}
+                ${gosHtml}
+            </div>
+        `;
 
     } catch (e) {
         console.error("Ошибка загрузки Штаба:", e);
