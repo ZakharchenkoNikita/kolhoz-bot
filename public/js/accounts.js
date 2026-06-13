@@ -1,6 +1,7 @@
 import { State } from './state.js';
 import { initDashboard } from './ui.js';
 import { fetchState } from './api.js';
+import { renderGroupDashboard } from './group.js'; // 🏢 ИМПОРТ ШТАБА
 
 export async function initAccountsDropdown() {
     // 1. Запрашиваем параллельно и группы, и аккаунты для скорости
@@ -272,13 +273,8 @@ export function changeGroupCustom(id, name) {
     
     initAccountsDropdown();
     
-    const container = document.getElementById('modules-container');
-    container.innerHTML = `
-        <div style="grid-column: 1 / -1; text-align: center; color: var(--apple-green); padding: 50px; font-size: 20px; font-weight: 600; border: 1px dashed var(--glass-border); border-radius: 20px;">
-            Выбран кооператив: ${name}<br>
-            <span style="font-size: 14px; color: var(--text-muted); font-weight: normal;">Интерфейс управления группой (Штаб) скоро появится здесь...</span>
-        </div>
-    `;
+    // 🏢 ВЫЗЫВАЕМ ОТРИСОВКУ ШТАБА ИЗ НОВОГО ФАЙЛА
+    renderGroupDashboard(id, name);
     
     // 🧹 ЖЕСТКО ПРЯЧЕМ ДОМИК
     const houseContainer = document.getElementById('house-container');
