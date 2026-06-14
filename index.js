@@ -124,7 +124,7 @@ app.post('/api/groups/plant-target', async (req, res) => {
     
     try {
         // 1. Ищем всех АКТИВНЫХ ботов, которые состоят в этом кооперативе
-        const accounts = await db.all('SELECT id, username FROM accounts WHERE group_id = ? AND is_active = 1', [groupId]);
+        const accounts = db.prepare('SELECT id, username FROM accounts WHERE group_id = ? AND is_active = 1').all(groupId);
         
         if (!accounts || accounts.length === 0) {
             return res.json({ success: false, message: 'В этой группе нет активных аккаунтов.' });
