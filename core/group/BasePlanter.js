@@ -35,29 +35,64 @@ class BasePlanter {
         try {
             this.log('🚜', `Штаб отдал приказ: сажаем [${targetName}]!`);
 
-            await this._clearBeds();
-            
-            let isAlreadyCharged = false;
             const $farm = await this.client.fetchHtml('/myfarm');
-            if ($farm) {
-                const currentSeed = $farm('a[href*="changeLastSeedLink"]').next('span').text().trim();
-                if (currentSeed === targetName) {
-                    this.log('🌱', `Семечко [${targetName}] уже заряжено в пушку! Пропускаем поиск.`);
-                    isAlreadyCharged = true;
+            if (!$farm) return false;
+
+            // 1. Читаем, что заряжено в ПУШКУ
+            const currentGunSeed = $farm('a[href*="changeLastSeedLink"]').next('span').text().trim() || '-';
+            
+            // 2. Читаем, что реально посажено на ГРЯДКАХ (ищем первую заполненную грядку)
+            let plantedSeed = '-';
+            $farm('li').each((_, el) => {
+                // Если есть портрет растения и заголовок - это грядка
+                if ($farm(el).find('img.portrait').length > 0) {
+                    const title = $farm(el).find('span.title').first().text().trim();
+                    if (title && plantedSeed === '-') {
+                        plantedSeed = title;
+                    }
                 }
+            });
+
+            // 3. УМНАЯ ЗАЩИТА РУБИНОВ (Сравниваем КОРНИ Цели и Посаженного на грядке)
+            const baseTarget = targetName.split(' ')[0].trim();
+            const basePlanted = plantedSeed !== '-' ? plantedSeed.split(' ')[0].trim() : '';
+
+            const cleanHref = $farm('a[href*="cleanLink"]').attr('href');
+
+            if (cleanHref) {
+                const cleanLiText = $farm('a[href*="cleanLink"]').parent().text();
+                const isPaid = cleanLiText.includes('Стоимость') || cleanLiText.includes('ruby.png');
+
+                // Сравниваем именно с ГРЯДКОЙ, а не с пушкой!
+                if (basePlanted && baseTarget === basePlanted) {
+                    this.log('🛡️', `На грядках уже растет [${plantedSeed}]. Экономим рубины, ждем урожая!`);
+                } else {
+                    if (isPaid) {
+                        this.log('💎', `На грядках растет [${plantedSeed !== '-' ? plantedSeed : 'другое'}]. Тратим рубины на очистку!`);
+                    } else {
+                        this.log('✨', `Очистка грядок бесплатна. Сносим старые посевы!`);
+                    }
+                    await this._executeClear(this._formatUrl(cleanHref));
+                }
+            } else {
+                this.log('✨', 'Грядки пусты (или уже собраны), очистка не требуется.');
             }
 
-            if (!isAlreadyCharged) {
+            // 4. Заряжаем пушку семечком (Проверяем именно ПУШКУ)
+            let isAlreadyCharged = (currentGunSeed === targetName);
+            if (isAlreadyCharged) {
+                this.log('🌱', `Семечко [${targetName}] уже заряжено в пушку! Пропускаем выбор.`);
+            } else {
                 const seedLink = await this._getSeedLink(targetName);
                 if (!seedLink) {
                     this.log('❌', `Не удалось найти ссылку на посадку ${targetName}.`);
                     return false;
                 }
-
                 const formattedSeedLink = this._formatUrl(seedLink);
                 await this._applyLink('🌱', `Заряжаем семечко...`, formattedSeedLink);
             }
 
+            // 5. Умная калибровка удобрений
             if (growTimeMin > 0) {
                 await this._applyFertilizer(growTimeMin);
             }
@@ -79,18 +114,8 @@ class BasePlanter {
     // 🛠️ РАБОЧИЕ МЕТОДЫ
     // ==========================================
 
-    async _clearBeds() {
-        this.log('🧹', 'Проверяем грядки...');
-        const $farm = await this.client.fetchHtml('/myfarm');
-        if (!$farm) return;
-
-        const cleanLink = this._formatUrl($farm('a[href*="cleanLink"]').attr('href'));
-        if (!cleanLink) {
-            this.log('✨', 'Грядки уже чистые!');
-            return;
-        }
-
-        this.log('🗑️', 'Сносим старые посевы...');
+    async _executeClear(cleanLink) {
+        this.log('🗑️', 'Подтверждаем снос...');
         const $confirmPage = await this.client.fetchHtml(cleanLink);
         if (!$confirmPage) return;
 
@@ -178,7 +203,6 @@ class BasePlanter {
 
             if (!updatedTargetLi) continue;
 
-            // 🔥 ЖЕЛЕЗОБЕТОННЫЙ ПОИСК ТОЛЬКО ВНУТРИ ТЕКУЩЕГО УДОБРЕНИЯ
             let bonusText = '';
             updatedTargetLi.find('span.minor').each((_, el) => {
                 if (currentDoc(el).text().includes('Вместе с Вашими бонусами')) {
