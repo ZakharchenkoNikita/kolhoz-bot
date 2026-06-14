@@ -23,7 +23,7 @@ class BasePlanter {
         
         // 🔥 ИСПРАВЛЕНИЯ ПУТЕЙ WICKET:
         if (cleanHref.startsWith('lab?')) return `/collective/${cleanHref}`;
-        if (cleanHref.startsWith('soils?')) return `/shop/${cleanHref}`; // Подстановка /shop/ для внутренних ссылок
+        if (cleanHref.startsWith('soils?')) return `/shop/${cleanHref}`; 
         
         return `/${cleanHref}`;
     }
@@ -39,16 +39,29 @@ class BasePlanter {
             // Шаг 1. Тотальная зачистка
             await this._clearBeds();
             
-            // Шаг 2. Ищем семечко
-            const seedLink = await this._getSeedLink(targetName);
-            if (!seedLink) {
-                this.log('❌', `Не удалось найти ссылку на посадку ${targetName}.`);
-                return false;
+            // Шаг 1.5. Проверка пушки (А вдруг семечко уже заряжено?)
+            let isAlreadyCharged = false;
+            const $farm = await this.client.fetchHtml('/myfarm');
+            if ($farm) {
+                // Вытаскиваем название текущего растения из слота
+                const currentSeed = $farm('a[href*="changeLastSeedLink"]').next('span').text().trim();
+                if (currentSeed === targetName) {
+                    this.log('🌱', `Семечко [${targetName}] уже заряжено в пушку! Пропускаем поиск.`);
+                    isAlreadyCharged = true;
+                }
             }
 
-            // Шаг 3. Заряжаем пушку семечком
-            const formattedSeedLink = this._formatUrl(seedLink);
-            await this._applyLink('🌱', `Заряжаем семечко...`, formattedSeedLink);
+            // Шаг 2 и 3. Ищем и заряжаем семечко (Только если пушка пуста или там другое растение)
+            if (!isAlreadyCharged) {
+                const seedLink = await this._getSeedLink(targetName);
+                if (!seedLink) {
+                    this.log('❌', `Не удалось найти ссылку на посадку ${targetName}. (Возможно, недоступно по уровню)`);
+                    return false;
+                }
+
+                const formattedSeedLink = this._formatUrl(seedLink);
+                await this._applyLink('🌱', `Заряжаем семечко...`, formattedSeedLink);
+            }
 
             // Шаг 4. Умная калибровка удобрений (с учетом изменения Стейтов Wicket)
             if (growTimeMin > 0) {
@@ -128,14 +141,12 @@ class BasePlanter {
         }
     }
 
-    // 🔥 ИСПРАВЛЕННЫЙ МЕТОД: Учитывает смену стейтов игры при клике "подробнее"
     async _findBestFertilizer(initialDoc, growTimeMin) {
         let currentDoc = initialDoc;
         let bestBuyLink = null;
         let lastBuyLink = null;
         let lastFertName = '';
 
-        // 1. Считаем, сколько вообще есть недонатных удобрений
         let itemsCount = 0;
         currentDoc('.block > ul > li').each((_, el) => {
             if (!currentDoc(el).html().includes('ruby.png')) itemsCount++;
@@ -146,7 +157,6 @@ class BasePlanter {
             return null;
         }
 
-        // 2. Проверяем каждое удобрение от дешевого к дорогому по индексу
         for (let i = 0; i < itemsCount; i++) {
             let targetLi = null;
             let currentIndex = 0;
@@ -163,14 +173,12 @@ class BasePlanter {
             
             if (!helpHref) continue;
 
-            // WICKET МАГИЯ: Заходим в "подробнее", стейт игры обновляется!
+            // Заходим в "подробнее"
             const detailDoc = await this.client.fetchHtml(this._formatUrl(helpHref));
             if (!detailDoc) continue;
             
-            // ОБЯЗАТЕЛЬНО обновляем текущий документ, иначе старые ссылки не сработают
             currentDoc = detailDoc; 
 
-            // Ищем это же удобрение, но уже на НОВОЙ странице (по индексу)
             let updatedTargetLi = null;
             let updIndex = 0;
             currentDoc('.block > ul > li').each((_, el) => {
@@ -181,7 +189,6 @@ class BasePlanter {
 
             if (!updatedTargetLi) continue;
 
-            // Парсим минуты (либо с учетом бонусов, либо базовые, если бонусов нет)
             let bonusText = currentDoc('li:contains("Вместе с Вашими бонусами")').find('.title').text().trim();
             if (!bonusText) {
                 const baseTextMatch = updatedTargetLi.find('.minor.small').text().match(/Ускоряет рост на\s*([^,]+)/i);
@@ -189,7 +196,6 @@ class BasePlanter {
             }
             const bonusMinutes = this._parseBonusMinutes(bonusText);
             
-            // Вытаскиваем ИНВАЛИДИРОВАННЫЙ buyLink с новой страницы
             const buyHref = updatedTargetLi.find('a[href*="buyLink"]').attr('href');
             lastBuyLink = this._formatUrl(buyHref);
             lastFertName = name;
@@ -205,7 +211,6 @@ class BasePlanter {
             }
         }
 
-        // Если ни одно не перекрыло полностью, берем самое мощное из проверенных
         if (!bestBuyLink && lastBuyLink) {
             this.log('⚠️', `Ни одно не перекрывает ${growTimeMin} мин. Берем самое мощное: ${lastFertName}.`);
             bestBuyLink = lastBuyLink;
