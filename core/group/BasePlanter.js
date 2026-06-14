@@ -18,15 +18,12 @@ class BasePlanter {
 
     _formatUrl(href) {
         if (!href) return null;
-        
-        // Убираем ./ в начале, если есть
         let cleanHref = href.startsWith('./') ? href.slice(2) : href;
         if (cleanHref.startsWith('/')) cleanHref = cleanHref.slice(1);
         
-        // Исправление для Лаборатории
-        if (cleanHref.startsWith('lab?')) {
-            return `/collective/${cleanHref}`;
-        }
+        // 🔥 ИСПРАВЛЕНИЯ ПУТЕЙ WICKET:
+        if (cleanHref.startsWith('lab?')) return `/collective/${cleanHref}`;
+        if (cleanHref.startsWith('soils?')) return `/shop/${cleanHref}`; // Подстановка /shop/ для внутренних ссылок
         
         return `/${cleanHref}`;
     }
@@ -39,10 +36,10 @@ class BasePlanter {
         try {
             this.log('🚜', `Штаб отдал приказ: сажаем [${targetName}]!`);
 
-            // Шаг 1. Зачистка грядок
+            // Шаг 1. Тотальная зачистка
             await this._clearBeds();
             
-            // Шаг 2. Ищем ссылку на посадку
+            // Шаг 2. Ищем семечко
             const seedLink = await this._getSeedLink(targetName);
             if (!seedLink) {
                 this.log('❌', `Не удалось найти ссылку на посадку ${targetName}.`);
@@ -53,7 +50,7 @@ class BasePlanter {
             const formattedSeedLink = this._formatUrl(seedLink);
             await this._applyLink('🌱', `Заряжаем семечко...`, formattedSeedLink);
 
-            // Шаг 4. Умная калибровка и покупка удобрения (только если нужно)
+            // Шаг 4. Умная калибровка удобрений (с учетом изменения Стейтов Wicket)
             if (growTimeMin > 0) {
                 await this._applyFertilizer(growTimeMin);
             }
@@ -106,11 +103,9 @@ class BasePlanter {
         await this.client.fetchHtml(link);
     }
 
-    // 🔥 ИСПРАВЛЕННЫЙ МЕТОД: Заходим в магазин ПРАВИЛЬНО
     async _applyFertilizer(growTimeMin) {
         this.log('🧪', `Идем на грядки, чтобы открыть витрину удобрений...`);
         
-        // 1. Возвращаемся на ферму, чтобы найти ссылку "Сменить удобрение"
         const $farm = await this.client.fetchHtml('/myfarm');
         if (!$farm) return;
 
@@ -121,68 +116,106 @@ class BasePlanter {
         }
 
         const changeSoilLink = this._formatUrl(changeSoilHref);
-        
-        // 2. Кликаем по ней — и вот теперь игра отдаст нам правильный список удобрений!
         this.log('🛒', `Открываем магазин...`);
         const $shop = await this.client.fetchHtml(changeSoilLink);
         if (!$shop) return;
 
-        // 3. Считаем математику и выбираем
         const bestFertilizerLink = await this._findBestFertilizer($shop, growTimeMin);
         if (bestFertilizerLink) {
             await this._applyLink('💉', 'Применяем высчитанное удобрение...', bestFertilizerLink);
         } else {
-            this.log('⚠️', 'Подходящее удобрение за монеты не найдено.');
+            this.log('⚠️', 'Подходящее удобрение не найдено. Сажаем без него.');
         }
     }
 
-    async _findBestFertilizer($, growTimeMin) {
-        const fertilizers = [];
-        
-        $('li').each((_, el) => {
-            const html = $(el).html();
-            if (!html || html.includes('ruby.png')) return; // Пропускаем донатные
+    // 🔥 ИСПРАВЛЕННЫЙ МЕТОД: Учитывает смену стейтов игры при клике "подробнее"
+    async _findBestFertilizer(initialDoc, growTimeMin) {
+        let currentDoc = initialDoc;
+        let bestBuyLink = null;
+        let lastBuyLink = null;
+        let lastFertName = '';
 
-            const buyLink = $(el).find('a[href*="buyLink"]').first().attr('href');
-            const helpLink = $(el).find('a[href*="helpLink"]').first().attr('href');
-            const priceText = $(el).find('.nobr .title').text();
-            
-            if (buyLink && helpLink && priceText) {
-                const price = parseInt(priceText.replace(/\D/g, ''), 10);
-                fertilizers.push({ 
-                    buyLink: this._formatUrl(buyLink), 
-                    helpLink: this._formatUrl(helpLink), 
-                    price 
-                });
-            }
+        // 1. Считаем, сколько вообще есть недонатных удобрений
+        let itemsCount = 0;
+        currentDoc('.block > ul > li').each((_, el) => {
+            if (!currentDoc(el).html().includes('ruby.png')) itemsCount++;
         });
 
-        if (fertilizers.length === 0) {
-            this.log('⚠️', 'Парсер вообще не нашел удобрений на странице магазина!');
+        if (itemsCount === 0) {
+            this.log('⚠️', 'Парсер вообще не нашел недонатных удобрений!');
             return null;
         }
 
-        let bestLink = fertilizers[fertilizers.length - 1].buyLink; 
+        // 2. Проверяем каждое удобрение от дешевого к дорогому по индексу
+        for (let i = 0; i < itemsCount; i++) {
+            let targetLi = null;
+            let currentIndex = 0;
+            currentDoc('.block > ul > li').each((_, el) => {
+                if (currentDoc(el).html().includes('ruby.png')) return;
+                if (currentIndex === i) targetLi = currentDoc(el);
+                currentIndex++;
+            });
 
-        for (let fert of fertilizers) {
-            const $detail = await this.client.fetchHtml(fert.helpLink);
-            if (!$detail) continue;
+            if (!targetLi) continue;
 
-            const bonusMinutes = this._parseBonusMinutes($detail);
+            const name = targetLi.find('div > a span').first().text().trim() || 'Удобрение';
+            const helpHref = targetLi.find('a[href*="helpLink"]').attr('href');
+            
+            if (!helpHref) continue;
+
+            // WICKET МАГИЯ: Заходим в "подробнее", стейт игры обновляется!
+            const detailDoc = await this.client.fetchHtml(this._formatUrl(helpHref));
+            if (!detailDoc) continue;
+            
+            // ОБЯЗАТЕЛЬНО обновляем текущий документ, иначе старые ссылки не сработают
+            currentDoc = detailDoc; 
+
+            // Ищем это же удобрение, но уже на НОВОЙ странице (по индексу)
+            let updatedTargetLi = null;
+            let updIndex = 0;
+            currentDoc('.block > ul > li').each((_, el) => {
+                if (currentDoc(el).html().includes('ruby.png')) return;
+                if (updIndex === i) updatedTargetLi = currentDoc(el);
+                updIndex++;
+            });
+
+            if (!updatedTargetLi) continue;
+
+            // Парсим минуты (либо с учетом бонусов, либо базовые, если бонусов нет)
+            let bonusText = currentDoc('li:contains("Вместе с Вашими бонусами")').find('.title').text().trim();
+            if (!bonusText) {
+                const baseTextMatch = updatedTargetLi.find('.minor.small').text().match(/Ускоряет рост на\s*([^,]+)/i);
+                if (baseTextMatch) bonusText = baseTextMatch[1].trim();
+            }
+            const bonusMinutes = this._parseBonusMinutes(bonusText);
+            
+            // Вытаскиваем ИНВАЛИДИРОВАННЫЙ buyLink с новой страницы
+            const buyHref = updatedTargetLi.find('a[href*="buyLink"]').attr('href');
+            lastBuyLink = this._formatUrl(buyHref);
+            lastFertName = name;
+            
+            const price = updatedTargetLi.find('.nobr .title').text().replace(/\D/g, '');
+
             if (bonusMinutes >= growTimeMin) {
-                bestLink = fert.buyLink;
-                this.log('💡', `Идеально подошло удобрение за ${fert.price} монет (ускорит на ${bonusMinutes} мин).`);
+                bestBuyLink = lastBuyLink;
+                this.log('💡', `Идеально подошло: ${name} за ${price} монет (ускорит на ${bonusMinutes} мин).`);
                 break;
+            } else {
+                this.log('🔍', `[${name}] дает только ${bonusMinutes} мин. Ищем мощнее...`);
             }
         }
 
-        return bestLink;
+        // Если ни одно не перекрыло полностью, берем самое мощное из проверенных
+        if (!bestBuyLink && lastBuyLink) {
+            this.log('⚠️', `Ни одно не перекрывает ${growTimeMin} мин. Берем самое мощное: ${lastFertName}.`);
+            bestBuyLink = lastBuyLink;
+        }
+
+        return bestBuyLink;
     }
 
-    _parseBonusMinutes($) {
-        const textBlock = $('li:contains("Вместе с Вашими бонусами ускоряет рост на:")').find('.title').text().trim();
+    _parseBonusMinutes(textBlock) {
         if (!textBlock) return 0;
-        
         let minutes = 0;
         const dMatch = textBlock.match(/(\d+)\s*дн/i);
         const hMatch = textBlock.match(/(\d+)\s*час/i);
@@ -191,7 +224,6 @@ class BasePlanter {
         if (dMatch) minutes += parseInt(dMatch[1], 10) * 1440;
         if (hMatch) minutes += parseInt(hMatch[1], 10) * 60;
         if (mMatch) minutes += parseInt(mMatch[1], 10);
-
         return minutes;
     }
 }
