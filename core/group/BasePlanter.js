@@ -21,7 +21,6 @@ class BasePlanter {
         let cleanHref = href.startsWith('./') ? href.slice(2) : href;
         if (cleanHref.startsWith('/')) cleanHref = cleanHref.slice(1);
         
-        // 🔥 ИСПРАВЛЕНИЯ ПУТЕЙ WICKET:
         if (cleanHref.startsWith('lab?')) return `/collective/${cleanHref}`;
         if (cleanHref.startsWith('soils?')) return `/shop/${cleanHref}`; 
         
@@ -36,14 +35,11 @@ class BasePlanter {
         try {
             this.log('🚜', `Штаб отдал приказ: сажаем [${targetName}]!`);
 
-            // Шаг 1. Тотальная зачистка
             await this._clearBeds();
             
-            // Шаг 1.5. Проверка пушки (А вдруг семечко уже заряжено?)
             let isAlreadyCharged = false;
             const $farm = await this.client.fetchHtml('/myfarm');
             if ($farm) {
-                // Вытаскиваем название текущего растения из слота
                 const currentSeed = $farm('a[href*="changeLastSeedLink"]').next('span').text().trim();
                 if (currentSeed === targetName) {
                     this.log('🌱', `Семечко [${targetName}] уже заряжено в пушку! Пропускаем поиск.`);
@@ -51,11 +47,10 @@ class BasePlanter {
                 }
             }
 
-            // Шаг 2 и 3. Ищем и заряжаем семечко (Только если пушка пуста или там другое растение)
             if (!isAlreadyCharged) {
                 const seedLink = await this._getSeedLink(targetName);
                 if (!seedLink) {
-                    this.log('❌', `Не удалось найти ссылку на посадку ${targetName}. (Возможно, недоступно по уровню)`);
+                    this.log('❌', `Не удалось найти ссылку на посадку ${targetName}.`);
                     return false;
                 }
 
@@ -63,7 +58,6 @@ class BasePlanter {
                 await this._applyLink('🌱', `Заряжаем семечко...`, formattedSeedLink);
             }
 
-            // Шаг 4. Умная калибровка удобрений (с учетом изменения Стейтов Wicket)
             if (growTimeMin > 0) {
                 await this._applyFertilizer(growTimeMin);
             }
@@ -76,10 +70,6 @@ class BasePlanter {
             return false;
         }
     }
-
-    // ==========================================
-    // 📄 МЕТОД ДЛЯ НАСЛЕДНИКОВ
-    // ==========================================
 
     async _getSeedLink(targetName) {
         throw new Error('Метод _getSeedLink должен быть реализован в дочернем классе!');
@@ -173,7 +163,6 @@ class BasePlanter {
             
             if (!helpHref) continue;
 
-            // Заходим в "подробнее"
             const detailDoc = await this.client.fetchHtml(this._formatUrl(helpHref));
             if (!detailDoc) continue;
             
@@ -189,11 +178,19 @@ class BasePlanter {
 
             if (!updatedTargetLi) continue;
 
-            let bonusText = currentDoc('li:contains("Вместе с Вашими бонусами")').find('.title').text().trim();
+            // 🔥 ЖЕЛЕЗОБЕТОННЫЙ ПОИСК ТОЛЬКО ВНУТРИ ТЕКУЩЕГО УДОБРЕНИЯ
+            let bonusText = '';
+            updatedTargetLi.find('span.minor').each((_, el) => {
+                if (currentDoc(el).text().includes('Вместе с Вашими бонусами')) {
+                    bonusText = currentDoc(el).next('.title').text().trim();
+                }
+            });
+
             if (!bonusText) {
                 const baseTextMatch = updatedTargetLi.find('.minor.small').text().match(/Ускоряет рост на\s*([^,]+)/i);
                 if (baseTextMatch) bonusText = baseTextMatch[1].trim();
             }
+            
             const bonusMinutes = this._parseBonusMinutes(bonusText);
             
             const buyHref = updatedTargetLi.find('a[href*="buyLink"]').attr('href');
