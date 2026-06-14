@@ -261,7 +261,7 @@ export function changeGroupCustom(id, name) {
     State.accountId = null; 
     State.global = null; // 🧹 УБИВАЕМ СТАРЫЕ ДАННЫЕ (чтобы рендер их не вернул)
     
-    document.getElementById('header-nickname').innerText = `👥 ${name}`;
+    document.getElementById('header-nickname').innerText = `${name}`;
     document.getElementById('account-dropdown-menu').classList.remove('active');
     document.getElementById('account-chevron').classList.remove('open');
     

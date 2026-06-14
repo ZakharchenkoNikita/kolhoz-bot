@@ -1,5 +1,3 @@
-// public/js/group.js
-
 export async function renderGroupDashboard(groupId, groupName) {
     const container = document.getElementById('modules-container');
     const houseContainer = document.getElementById('house-container');
@@ -47,8 +45,13 @@ export async function renderGroupDashboard(groupId, groupName) {
                     
                     <div style="display: flex; align-items: center; gap: 16px;">
                         ${data.lab.image ? `<img src="https://sadovnik.mobi${data.lab.image}" style="width: 56px; height: 56px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">` : ''}
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <div style="font-size: 19px; font-weight: 700; color: white; letter-spacing: -0.3px;">${data.lab.currentPlant}</div>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="font-size: 19px; font-weight: 700; color: white; letter-spacing: -0.3px;">${data.lab.currentPlant}</div>
+                                <button onclick="window.startPlanting('${data.lab.currentPlant}', 'lab')" style="background: rgba(50, 215, 75, 0.15); border: 1px solid rgba(50, 215, 75, 0.2); width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--apple-green); cursor: pointer; padding: 0; transition: transform 0.1s;" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'" title="Посадить селекцию">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><path d="M5 3l14 9-14 9V3z"/></svg>
+                                </button>
+                            </div>
                             <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">
                                 ${data.lab.timeClock ? `⏱ ${data.lab.timeClock}` : ''} ${data.lab.timeSoil ? `&nbsp; 🌱 ${data.lab.timeSoil}` : ''}
                             </div>
@@ -94,8 +97,13 @@ export async function renderGroupDashboard(groupId, groupName) {
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
                                     <div style="display: flex; align-items: center; gap: 16px;">
                                         ${t.image ? `<img src="https://sadovnik.mobi${t.image}" style="width: 56px; height: 56px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">` : ''}
-                                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                                            <div style="font-size: 19px; font-weight: 700; color: white; letter-spacing: -0.3px;">${t.name}</div>
+                                       <div style="display: flex; flex-direction: column; gap: 4px;">
+                                            <div style="display: flex; align-items: center; gap: 10px;">
+                                                <div style="font-size: 19px; font-weight: 700; color: white; letter-spacing: -0.3px;">${t.name}</div>
+                                                <button onclick="window.startPlanting('${t.name}', 'goszakaz')" style="background: rgba(50, 215, 75, 0.15); border: 1px solid rgba(50, 215, 75, 0.2); width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--apple-green); cursor: pointer; padding: 0; transition: transform 0.1s;" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'" title="Посадить госзаказ">
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><path d="M5 3l14 9-14 9V3z"/></svg>
+                                                </button>
+                                            </div>
                                             <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">
                                                 ${t.growTime ? `⏱ ${t.growTime}` : ''} ${t.fertTime ? `&nbsp; 🌱 ${t.fertTime}` : ''}
                                             </div>
@@ -137,3 +145,14 @@ export async function renderGroupDashboard(groupId, groupName) {
         container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: #ff453a;">Ошибка соединения с сервером.</div>`;
     }
 }
+
+// ==========================================
+// ОТПРАВКА ПРИКАЗА В ШТАБ (Фронтенд -> Бэкенд)
+// ==========================================
+window.startPlanting = async function(targetName, type) {
+    const isConfirmed = confirm(`Отдать приказ всем аккаунтам группы посадить: ${targetName}?`);
+    if (!isConfirmed) return;
+    
+    // Пока просто выводим в консоль. На следующем этапе здесь будет fetch-запрос к нашему API!
+    console.log(`[ШТАБ] Команда отправлена: ${targetName} (${type})`);
+};
