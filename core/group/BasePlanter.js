@@ -23,8 +23,7 @@ class BasePlanter {
         let cleanHref = href.startsWith('./') ? href.slice(2) : href;
         if (cleanHref.startsWith('/')) cleanHref = cleanHref.slice(1);
         
-        // 🔥 ИСПРАВЛЕНИЕ: В игре ссылка лабы пишется как ./lab, 
-        // но реальный путь /collective/lab. Исправляем на лету!
+        // Исправление для Лаборатории
         if (cleanHref.startsWith('lab?')) {
             return `/collective/${cleanHref}`;
         }
@@ -33,17 +32,17 @@ class BasePlanter {
     }
 
     // ==========================================
-    // 🚀 ГЛАВНЫЙ ОРКЕСТРАТОР (Шаблонный метод)
+    // 🚀 ГЛАВНЫЙ ОРКЕСТРАТОР
     // ==========================================
 
     async prepareFarm(targetName, growTimeMin) {
         try {
             this.log('🚜', `Штаб отдал приказ: сажаем [${targetName}]!`);
 
-            // Шаг 1. Тотальная зачистка полигона
+            // Шаг 1. Зачистка грядок
             await this._clearBeds();
             
-            // Шаг 2. Добываем ссылку на семечко (через дочерний класс)
+            // Шаг 2. Ищем ссылку на посадку
             const seedLink = await this._getSeedLink(targetName);
             if (!seedLink) {
                 this.log('❌', `Не удалось найти ссылку на посадку ${targetName}.`);
@@ -52,9 +51,9 @@ class BasePlanter {
 
             // Шаг 3. Заряжаем пушку семечком
             const formattedSeedLink = this._formatUrl(seedLink);
-            await this._applyLink('🌱', `Заряжаем семечко (GET ${formattedSeedLink})...`, formattedSeedLink);
+            await this._applyLink('🌱', `Заряжаем семечко...`, formattedSeedLink);
 
-            // Шаг 4. Умная калибровка и покупка удобрения
+            // Шаг 4. Умная калибровка и покупка удобрения (только если нужно)
             if (growTimeMin > 0) {
                 await this._applyFertilizer(growTimeMin);
             }
@@ -107,11 +106,28 @@ class BasePlanter {
         await this.client.fetchHtml(link);
     }
 
+    // 🔥 ИСПРАВЛЕННЫЙ МЕТОД: Заходим в магазин ПРАВИЛЬНО
     async _applyFertilizer(growTimeMin) {
-        this.log('🧪', `Подбираем удобрение для перекрытия ${growTimeMin} мин...`);
-        const $shop = await this.client.fetchHtml('/shop/soils');
+        this.log('🧪', `Идем на грядки, чтобы открыть витрину удобрений...`);
+        
+        // 1. Возвращаемся на ферму, чтобы найти ссылку "Сменить удобрение"
+        const $farm = await this.client.fetchHtml('/myfarm');
+        if (!$farm) return;
+
+        const changeSoilHref = $farm('a[href*="changeLastSoilLink"]').attr('href');
+        if (!changeSoilHref) {
+            this.log('⚠️', 'Не могу найти ссылку "Сменить удобрение" на грядках!');
+            return;
+        }
+
+        const changeSoilLink = this._formatUrl(changeSoilHref);
+        
+        // 2. Кликаем по ней — и вот теперь игра отдаст нам правильный список удобрений!
+        this.log('🛒', `Открываем магазин...`);
+        const $shop = await this.client.fetchHtml(changeSoilLink);
         if (!$shop) return;
 
+        // 3. Считаем математику и выбираем
         const bestFertilizerLink = await this._findBestFertilizer($shop, growTimeMin);
         if (bestFertilizerLink) {
             await this._applyLink('💉', 'Применяем высчитанное удобрение...', bestFertilizerLink);
@@ -123,10 +139,9 @@ class BasePlanter {
     async _findBestFertilizer($, growTimeMin) {
         const fertilizers = [];
         
-        // 🔥 ИСПРАВЛЕНИЕ: Убрали парсинг баланса монет. Берем вообще все удобрения за монеты!
         $('li').each((_, el) => {
             const html = $(el).html();
-            if (!html || html.includes('ruby.png')) return; // Пропускаем донатные (за рубины)
+            if (!html || html.includes('ruby.png')) return; // Пропускаем донатные
 
             const buyLink = $(el).find('a[href*="buyLink"]').first().attr('href');
             const helpLink = $(el).find('a[href*="helpLink"]').first().attr('href');
@@ -147,10 +162,8 @@ class BasePlanter {
             return null;
         }
 
-        // По умолчанию ставим самое мощное/дорогое удобрение (Магнезит), если вдруг таймер слишком большой
         let bestLink = fertilizers[fertilizers.length - 1].buyLink; 
 
-        // Идем от дешевых к дорогим и ищем то, которое покроет время
         for (let fert of fertilizers) {
             const $detail = await this.client.fetchHtml(fert.helpLink);
             if (!$detail) continue;
