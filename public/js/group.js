@@ -51,7 +51,7 @@ export async function renderGroupDashboard(groupId, groupName) {
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <div style="font-size: 19px; font-weight: 700; color: white; letter-spacing: -0.3px;">${data.lab.currentPlant}</div>
-                                <button onclick="window.startPlanting('${data.lab.currentPlant}', 'lab')" style="background: rgba(50, 215, 75, 0.15); border: 1px solid rgba(50, 215, 75, 0.2); width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--apple-green); cursor: pointer; padding: 0; transition: transform 0.1s;" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'" title="Посадить селекцию">
+                                <button onclick="window.startPlanting('${data.lab.currentPlant}', 'lab', '${data.lab.timeClock || ''}')" style="background: rgba(50, 215, 75, 0.15); border: 1px solid rgba(50, 215, 75, 0.2); width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--apple-green); cursor: pointer; padding: 0; transition: transform 0.1s;" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'" title="Посадить селекцию">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><path d="M5 3l14 9-14 9V3z"/></svg>
                                 </button>
                             </div>
@@ -103,7 +103,7 @@ export async function renderGroupDashboard(groupId, groupName) {
                                        <div style="display: flex; flex-direction: column; gap: 4px;">
                                             <div style="display: flex; align-items: center; gap: 10px;">
                                                 <div style="font-size: 19px; font-weight: 700; color: white; letter-spacing: -0.3px;">${t.name}</div>
-                                                <button onclick="window.startPlanting('${t.name}', 'goszakaz')" style="background: rgba(50, 215, 75, 0.15); border: 1px solid rgba(50, 215, 75, 0.2); width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--apple-green); cursor: pointer; padding: 0; transition: transform 0.1s;" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'" title="Посадить госзаказ">
+                                                <button onclick="window.startPlanting('${t.name}', 'goszakaz', '${t.growTime || ''}')" style="background: rgba(50, 215, 75, 0.15); border: 1px solid rgba(50, 215, 75, 0.2); width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--apple-green); cursor: pointer; padding: 0; transition: transform 0.1s;" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'" title="Посадить госзаказ">
                                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><path d="M5 3l14 9-14 9V3z"/></svg>
                                                 </button>
                                             </div>
@@ -152,7 +152,7 @@ export async function renderGroupDashboard(groupId, groupName) {
 // ==========================================
 // ОТПРАВКА ПРИКАЗА В ШТАБ (Фронтенд -> Бэкенд)
 // ==========================================
-window.startPlanting = async function(targetName, type) {
+window.startPlanting = async function(targetName, type, timeString) {
     if (!currentGroupId) {
         alert("Ошибка: Не выбран кооператив!");
         return;
@@ -165,7 +165,7 @@ window.startPlanting = async function(targetName, type) {
         const res = await fetch('/api/groups/plant-target', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groupId: currentGroupId, targetName: targetName, type: type })
+            body: JSON.stringify({ groupId: currentGroupId, targetName: targetName, type: type, timeString: timeString || '' })
         });
         
         const data = await res.json();

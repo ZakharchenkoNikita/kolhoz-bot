@@ -120,9 +120,21 @@ app.post('/api/groups/settings', (req, res) => {
 // БОЕВОЙ ПРИКАЗ: ПОСАДКА ГОСЗАКАЗА / ЛАБОРАТОРИИ
 // ==================================================
 app.post('/api/groups/plant-target', async (req, res) => {
-    const { groupId, targetName, type } = req.body;
+    const { groupId, targetName, type, timeString } = req.body;
     
     try {
+        // Переводим строковое время в минуты
+        let growTimeMin = 0;
+        if (timeString) {
+            const dMatch = timeString.match(/(\d+)\s*дн/i);
+            const hMatch = timeString.match(/(\d+)\s*час/i);
+            const mMatch = timeString.match(/(\d+)\s*минут/i);
+
+            if (dMatch) growTimeMin += parseInt(dMatch[1], 10) * 1440;
+            if (hMatch) growTimeMin += parseInt(hMatch[1], 10) * 60;
+            if (mMatch) growTimeMin += parseInt(mMatch[1], 10);
+        }
+
         // 1. Ищем всех АКТИВНЫХ ботов, которые состоят в этом кооперативе
         const allAccounts = db.getAccounts();
         const accounts = allAccounts.filter(a => a.group_id == groupId && a.is_active);
@@ -158,7 +170,7 @@ app.post('/api/groups/plant-target', async (req, res) => {
                 // Запускаем спец-алгоритм (Очистка -> Посадка -> Удобрение)
                 // ВАЖНО: Время созревания (growTimeMin) пока передаем как 0, 
                 // мы добавим парсинг времени чуть позже, чтобы не усложнять всё сразу.
-                const success = await planter.prepareFarm(targetName, 0);
+                const success = await planter.prepareFarm(targetName, growTimeMin);
 
                 if (success) {
                     // 5. МОСТ: Если всё заряжено успешно, сбрасываем таймер грядок в 0!
