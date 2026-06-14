@@ -1,4 +1,7 @@
+let currentGroupId = null;
+
 export async function renderGroupDashboard(groupId, groupName) {
+    currentGroupId = groupId;
     const container = document.getElementById('modules-container');
     const houseContainer = document.getElementById('house-container');
     
@@ -150,9 +153,30 @@ export async function renderGroupDashboard(groupId, groupName) {
 // ОТПРАВКА ПРИКАЗА В ШТАБ (Фронтенд -> Бэкенд)
 // ==========================================
 window.startPlanting = async function(targetName, type) {
+    if (!currentGroupId) {
+        alert("Ошибка: Не выбран кооператив!");
+        return;
+    }
+
     const isConfirmed = confirm(`Отдать приказ всем аккаунтам группы посадить: ${targetName}?`);
     if (!isConfirmed) return;
     
-    // Пока просто выводим в консоль. На следующем этапе здесь будет fetch-запрос к нашему API!
-    console.log(`[ШТАБ] Команда отправлена: ${targetName} (${type})`);
+    try {
+        const res = await fetch('/api/groups/plant-target', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupId: currentGroupId, targetName: targetName, type: type })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+            // Показываем зеленую плашку успеха (или просто alert)
+            alert(`✅ Приказ отправлен!\n${data.message}`);
+        } else {
+            alert(`❌ Ошибка: ${data.message}`);
+        }
+    } catch (e) {
+        console.error("Ошибка при отправке приказа:", e);
+        alert("Ошибка сети при связи со Штабом.");
+    }
 };

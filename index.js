@@ -116,6 +116,64 @@ app.post('/api/groups/settings', (req, res) => {
     res.json({ success: true });
 });
 
+// ==================================================
+// БОЕВОЙ ПРИКАЗ: ПОСАДКА ГОСЗАКАЗА / ЛАБОРАТОРИИ
+// ==================================================
+app.post('/api/groups/plant-target', async (req, res) => {
+    const { groupId, targetName, type } = req.body;
+    
+    try {
+        // 1. Ищем всех АКТИВНЫХ ботов, которые состоят в этом кооперативе
+        const accounts = await db.all('SELECT id, username FROM accounts WHERE group_id = ? AND is_active = 1', [groupId]);
+        
+        if (!accounts || accounts.length === 0) {
+            return res.json({ success: false, message: 'В этой группе нет активных аккаунтов.' });
+        }
+
+        // 2. Сразу отвечаем интерфейсу, чтобы он не зависал, пока боты сажают
+        res.json({ success: true, message: `Команду "${targetName}" получили ${accounts.length} бот(ов). Запуск алгоритма...` });
+
+        // 3. Раздаем приказ каждому боту параллельно
+        accounts.forEach(async (acc) => {
+            const engine = engines[acc.id]; // Получаем запущенный движок бота
+            if (!engine) {
+                console.log(`[ШТАБ] Бот ${acc.username} выключен, пропускаем.`);
+                return;
+            }
+
+            console.log(`[ШТАБ] Отдаем приказ боту ${acc.username} -> ${targetName} (${type})`);
+
+            // 4. Подключаем нужный класс-исполнитель
+            let planter = null;
+            if (type === 'lab') {
+                const LabPlanter = require('./core/group/LabPlanter');
+                planter = new LabPlanter(engine.client, acc.username);
+            } else if (type === 'goszakaz') {
+                const GoszakazPlanter = require('./core/group/GoszakazPlanter');
+                planter = new GoszakazPlanter(engine.client, acc.username);
+            }
+
+            if (planter) {
+                // Запускаем спец-алгоритм (Очистка -> Посадка -> Удобрение)
+                // ВАЖНО: Время созревания (growTimeMin) пока передаем как 0, 
+                // мы добавим парсинг времени чуть позже, чтобы не усложнять всё сразу.
+                const success = await planter.prepareFarm(targetName, 0);
+
+                if (success) {
+                    // 5. МОСТ: Если всё заряжено успешно, сбрасываем таймер грядок в 0!
+                    // При следующем тике BotEngine сам увидит 0 и запустит FarmModule.
+                    await engine.db.saveTimer('kb_f_timer', 0);
+                    console.log(`✅ [${acc.username}] Таймер грядок сброшен. Ожидаем посев!`);
+                }
+            }
+        });
+
+    } catch (err) {
+        console.error('[ШТАБ] Ошибка маршрутизации приказа:', err);
+        res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера.' });
+    }
+});
+
 // 📡 API: Разведка состояния Штаба (Лаба + Госзаказ)
 app.get('/api/groups/hq-status', async (req, res) => {
     const groupId = req.query.groupId;
