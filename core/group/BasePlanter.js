@@ -1,3 +1,7 @@
+/**
+ * Базовый класс для автоматической посадки (ООП Родитель).
+ * Берет на себя грязную работу: очистку грядок, расчет времени и применение удобрений.
+ */
 class BasePlanter {
     constructor(client, username) {
         this.client = client;
@@ -14,18 +18,24 @@ class BasePlanter {
 
     _formatUrl(href) {
         if (!href) return null;
-        return href.startsWith('./') ? href.slice(1) : href;
+        
+        // Убираем ./ в начале, если есть
+        let cleanHref = href.startsWith('./') ? href.slice(2) : href;
+        if (cleanHref.startsWith('/')) cleanHref = cleanHref.slice(1);
+        
+        // 🔥 ИСПРАВЛЕНИЕ: В игре ссылка лабы пишется как ./lab, 
+        // но реальный путь /collective/lab. Исправляем на лету!
+        if (cleanHref.startsWith('lab?')) {
+            return `/collective/${cleanHref}`;
+        }
+        
+        return `/${cleanHref}`;
     }
 
     // ==========================================
     // 🚀 ГЛАВНЫЙ ОРКЕСТРАТОР (Шаблонный метод)
     // ==========================================
 
-    /**
-     * Запускает полный цикл подготовки грядок.
-     * @param {string} targetName - Название растения (Вишня, Слива)
-     * @param {number} growTimeMin - Базовое время созревания в минутах
-     */
     async prepareFarm(targetName, growTimeMin) {
         try {
             this.log('🚜', `Штаб отдал приказ: сажаем [${targetName}]!`);
@@ -41,7 +51,8 @@ class BasePlanter {
             }
 
             // Шаг 3. Заряжаем пушку семечком
-            await this._applyLink('🌱', 'Заряжаем семечко...', seedLink);
+            const formattedSeedLink = this._formatUrl(seedLink);
+            await this._applyLink('🌱', `Заряжаем семечко (GET ${formattedSeedLink})...`, formattedSeedLink);
 
             // Шаг 4. Умная калибровка и покупка удобрения
             if (growTimeMin > 0) {
@@ -66,10 +77,9 @@ class BasePlanter {
     }
 
     // ==========================================
-    // 🛠️ РАБОЧИЕ МЕТОДЫ (Разбиты на логические блоки)
+    // 🛠️ РАБОЧИЕ МЕТОДЫ
     // ==========================================
 
-    /** Шаг 1: Снос старых посевов */
     async _clearBeds() {
         this.log('🧹', 'Проверяем грядки...');
         const $farm = await this.client.fetchHtml('/myfarm');
@@ -92,13 +102,11 @@ class BasePlanter {
         }
     }
 
-    /** Универсальный метод для клика по системным ссылкам */
     async _applyLink(emoji, text, link) {
         this.log(emoji, text);
-        await this.client.fetchHtml(this._formatUrl(link));
+        await this.client.fetchHtml(link);
     }
 
-    /** Логика работы с магазином удобрений */
     async _applyFertilizer(growTimeMin) {
         this.log('🧪', `Подбираем удобрение для перекрытия ${growTimeMin} мин...`);
         const $shop = await this.client.fetchHtml('/shop/soils');
@@ -112,21 +120,13 @@ class BasePlanter {
         }
     }
 
-    /** Умный поиск идеального удобрения в магазине */
     async _findBestFertilizer($, growTimeMin) {
         const fertilizers = [];
         
-        // 1. Парсим текущий баланс монет (защита от покупок в минус)
-        let currentCoins = Infinity;
-        const moneyMatch = $.html().match(/money\.png.*?<span[^>]*>([\d\s',]+)<\/span>/i);
-        if (moneyMatch && moneyMatch[1]) {
-            currentCoins = parseInt(moneyMatch[1].replace(/\D/g, ''), 10);
-        }
-
-        // 2. Собираем удобрения за монеты, на которые хватает денег
+        // 🔥 ИСПРАВЛЕНИЕ: Убрали парсинг баланса монет. Берем вообще все удобрения за монеты!
         $('li').each((_, el) => {
             const html = $(el).html();
-            if (!html || html.includes('ruby.png')) return; // Пропускаем донатные
+            if (!html || html.includes('ruby.png')) return; // Пропускаем донатные (за рубины)
 
             const buyLink = $(el).find('a[href*="buyLink"]').first().attr('href');
             const helpLink = $(el).find('a[href*="helpLink"]').first().attr('href');
@@ -134,21 +134,23 @@ class BasePlanter {
             
             if (buyLink && helpLink && priceText) {
                 const price = parseInt(priceText.replace(/\D/g, ''), 10);
-                if (currentCoins >= price) {
-                    fertilizers.push({ 
-                        buyLink: this._formatUrl(buyLink), 
-                        helpLink: this._formatUrl(helpLink), 
-                        price 
-                    });
-                }
+                fertilizers.push({ 
+                    buyLink: this._formatUrl(buyLink), 
+                    helpLink: this._formatUrl(helpLink), 
+                    price 
+                });
             }
         });
 
-        if (fertilizers.length === 0) return null;
+        if (fertilizers.length === 0) {
+            this.log('⚠️', 'Парсер вообще не нашел удобрений на странице магазина!');
+            return null;
+        }
 
-        // 3. Вычисляем лучшее удобрение (перебираем от дешевых к дорогим)
-        let bestLink = fertilizers[fertilizers.length - 1].buyLink; // Магнезит по умолчанию (резерв)
+        // По умолчанию ставим самое мощное/дорогое удобрение (Магнезит), если вдруг таймер слишком большой
+        let bestLink = fertilizers[fertilizers.length - 1].buyLink; 
 
+        // Идем от дешевых к дорогим и ищем то, которое покроет время
         for (let fert of fertilizers) {
             const $detail = await this.client.fetchHtml(fert.helpLink);
             if (!$detail) continue;
@@ -156,7 +158,7 @@ class BasePlanter {
             const bonusMinutes = this._parseBonusMinutes($detail);
             if (bonusMinutes >= growTimeMin) {
                 bestLink = fert.buyLink;
-                this.log('💡', `Идеально подошло удобрение за ${fert.price} монет (с бонусами ускорит на ${bonusMinutes} мин).`);
+                this.log('💡', `Идеально подошло удобрение за ${fert.price} монет (ускорит на ${bonusMinutes} мин).`);
                 break;
             }
         }
@@ -164,7 +166,6 @@ class BasePlanter {
         return bestLink;
     }
 
-    /** Извлекает минуты из строки: "Вместе с Вашими бонусами ускоряет рост на: 7 часов 54 минуты" */
     _parseBonusMinutes($) {
         const textBlock = $('li:contains("Вместе с Вашими бонусами ускоряет рост на:")').find('.title').text().trim();
         if (!textBlock) return 0;
